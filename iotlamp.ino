@@ -10,6 +10,7 @@
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <Preferences.h>
+#include <LittleFS.h>
 
 // ---------- brightness / color ----------
 
@@ -150,6 +151,8 @@ void loadEnergy();
 
 // ================================================================
 
+static bool ota_in_progress = false;
+
 void setup() {
     Serial.begin(115200);
     delay(800);
@@ -176,10 +179,44 @@ void setup() {
     delay(2000);
     sync_ntp();
 
+    ArduinoOTA.setHostname(OTA_HOSTNAME);
+
+    ArduinoOTA.onStart([]() {
+        ota_in_progress = true;
+        FastLED.clear(true);
+        FastLED.show();
+        Serial.println(F("OTA: start"));
+    });
+    ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
+        static unsigned int last = 0;
+        unsigned int pct = (p * 100) / t;
+        if (pct != last) { last = pct; Serial.printf("OTA: %u%%\n", pct); }
+    });
+    ArduinoOTA.onError([](ota_error_t e) {
+        const char *msg;
+        switch (e) {
+            case OTA_AUTH_ERROR:    msg = "auth"; break;
+            case OTA_BEGIN_ERROR:   msg = "begin"; break;
+            case OTA_CONNECT_ERROR: msg = "connect"; break;
+            case OTA_RECEIVE_ERROR: msg = "receive"; break;
+            case OTA_END_ERROR:     msg = "end"; break;
+            default:                msg = "unknown"; break;
+        }
+        Serial.printf("OTA: error [%u] %s\n", e, msg);
+    });
+
+    ArduinoOTA.setTimeout(120000);
     ArduinoOTA.begin();
+
+    if (LittleFS.begin(true)) {
+        Serial.println(F("LittleFS mounted"));
+    } else {
+        Serial.println(F("LittleFS mount failed"));
+    }
 
     wsSock.onEvent(onWsEvent);
     server.addHandler(&wsSock);
+    server.serveStatic("/", LittleFS, "/").setDefaultFile("dashboard.html");
     server.begin();
 
     Serial.print(F("WebSocket server started on ws://"));
@@ -192,6 +229,10 @@ void setup() {
 // ================================================================
 
 void loop() {
+    ArduinoOTA.handle();
+    if (ota_in_progress) {
+        return;
+    }
     unsigned long now = millis();
 
     if (WiFi.status() != WL_CONNECTED)
