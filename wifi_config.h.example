@@ -1,0 +1,9 @@
+#pragma once
+
+// Copy this file to wifi_config.h and fill in your credentials
+const char *WIFI_SSID     = "YOUR_SSID";
+const char *WIFI_PASSWORD = "YOUR_PASSWORD";
+
+const char *NTP_SERVER        = "pool.ntp.org";
+const long  GMT_OFFSET_SEC    = 0;
+const int   DAYLIGHT_OFFSET_SEC = 0;
