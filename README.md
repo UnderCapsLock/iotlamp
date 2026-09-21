@@ -1,11 +1,10 @@
-# IoT Smart Lamp
+# LightPlus
 
 A presence-aware bedside lamp that turns on only when the room is dark **and** a human is actually in it. Uses mmWave radar to detect stationary people (not just motion), dims gently toward bedtime, ramps up for a wake window, and hosts its own control dashboard — no cloud, no app, no external dependencies.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![Dashboard screenshot](screenshots/dashboard.png)
-> *Add a screenshot of the dashboard at `screenshots/dashboard.png`*
 
 ---
 
@@ -131,18 +130,29 @@ If Force Off persisted across reboots, a power outage would leave the lamp perma
 
 ```
 iotlamp/
-├── iotlamp.ino         # Main firmware: sensors, logic, LED driver, WebSocket, OTA (802 lines)
-├── config.h            # RuntimeConfig struct and setter declarations
-├── config.cpp          # NVS load/save, validation, defaults
-├── pins.h              # GPIO pin assignments and timing constants
-├── state.h             # LampMode, Presence enums, LampState struct
-├── wifi_config.h       # WiFi credentials (gitignored — not in repo)
+├── iotlamp.ino           # Main firmware: sensors, logic, LED driver, WebSocket, OTA
+├── config.h / config.cpp # RuntimeConfig struct, NVS load/save, validation
+├── pins.h                # GPIO pin assignments and timing constants
+├── state.h               # LampMode, Presence enums, LampState struct
+├── wifi_config.h         # WiFi credentials (gitignored — not in repo)
 ├── wifi_config.h.example # Template — copy to wifi_config.h and fill in
-├── dashboard.html      # Single-page dashboard (vanilla HTML/CSS/JS, no dependencies)
-├── data/
-│   └── dashboard.html  # Source for LittleFS filesystem image upload
-├── LICENSE             # MIT
-└── README.md           # This file
+├── data/                 # Web app (uploaded to LittleFS)
+│   ├── index.html        #   Dashboard shell
+│   ├── app.css           #   Design system / styles
+│   ├── app.js            #   WebSocket client + UI logic
+│   ├── manifest.webmanifest  # PWA manifest
+│   ├── sw.js             #   Service worker (offline app shell)
+│   ├── icon-*.png        #   App icons (192/512/maskable)
+│   └── logo.png          #   Optional brand logo (see Branding & Logos)
+├── lib/MyLD2410/         # Vendored radar library (used by CI, reference copy)
+├── tools/
+│   ├── test_ws.mjs       # End-to-end WebSocket test suite
+│   └── README.md         # Tool usage
+├── .github/workflows/ci.yml  # Firmware compile check
+├── littlefs.bin          # Generated LittleFS image (gitignored; see tools/README)
+├── CHANGELOG.md
+├── LICENSE               # MIT
+└── README.md             # This file
 ```
 
 ---
@@ -182,7 +192,7 @@ Install these via the **Library Manager** (Sketch → Include Library → Manage
 | **LittleFS** | Flash filesystem (bundled with ESP32 core) |
 | **MyLD2410** | Custom library for LD2410C radar — [GitHub link](https://github.com/) |
 
-> The `MyLD2410` library source is not included in this repository. Clone it into your Arduino libraries folder.
+> `MyLD2410` is vendored under [`lib/MyLD2410`](lib/MyLD2410) so CI builds and reference copies work out of the box. For local Arduino builds, also install it into your Arduino libraries folder.
 
 ### 4. Configure ESP32 partition scheme
 
@@ -192,7 +202,7 @@ Select a partition scheme with two OTA app partitions and a LittleFS data partit
 
 ### 5. Upload
 
-1. **Upload the LittleFS data** — Tools → ESP32 Sketch Data Upload. This writes `data/dashboard.html` to the flash filesystem.
+1. **Upload the LittleFS data** — Tools → ESP32 Sketch Data Upload. This writes everything in `data/` (dashboard app, PWA assets, icons) to the flash filesystem.
 2. **Compile and upload** the sketch via USB.
 
 After the first USB upload, all future firmware updates can be done over WiFi via OTA (see below).
@@ -208,8 +218,6 @@ Open `http://<esp32-ip>/` in any browser on the same WiFi network. The dashboard
 ## Dashboard
 
 ![Dashboard screenshot](screenshots/dashboard.png)
-> *Add a screenshot of the dashboard at `screenshots/dashboard.png`*
-> *Add a photo of the lamp hardware at `screenshots/lamp.jpg`*
 
 The dashboard is a single-page application with:
 
@@ -223,6 +231,24 @@ The dashboard is a single-page application with:
 - **Schedule config** — bedtime dim and wake ramp: start time + duration
 - **Gate sensitivity** — LD2410C per-gate moving and stationary thresholds (0–100)
 - **Command log** — color-coded last 20 events (sent / received / error)
+
+---
+
+## Install as an app (PWA)
+
+The dashboard is an installable web app. On Android Chrome (or desktop Chrome/Edge), open the dashboard and use **Install app** / **Add to Home screen** — it then launches fullscreen with its own icon, and keeps working from cache if the device is briefly unreachable.
+
+> Browsers only allow PWA installation on secure origins. A plain `http://<esp32-ip>` LAN address normally can't offer it; for a demo you can enable `chrome://flags/#unsafely-treat-insecure-origin-as-secure` and add the device URL, or serve the dashboard behind HTTPS.
+
+---
+
+## Branding & Logos
+
+Branding is centralized so it is easy to change:
+
+- **Name** — search for `LightPlus` in `dashboard.html`, `iotlamp.ino` (boot banner), and this README.
+- **Logo** — drop your image as `data/logo.png` (square or wide, ~28-56 px tall recommended), then re-upload the filesystem (Tools → ESP32 Sketch Data Upload). The dashboard header picks it up automatically and falls back to the LightPlus wordmark when no logo file is present.
+- **Different filename/format** — edit the `src` of the `#brandLogo` image in `dashboard.html` (e.g. `logo.svg`), copy the file into `data/`, and re-upload the filesystem.
 
 ---
 
@@ -316,12 +342,12 @@ All settings can be changed live via the dashboard or WebSocket commands.
 
 After the initial USB upload, firmware can be updated wirelessly.
 
-**Hostname:** `iotlamp`
+**Hostname:** `lightplus`
 **OTA password:** `your_ota_password` (set in `wifi_config.h`)
 
 ### Via Arduino IDE
 
-- **Tools → Port** — Select the network port for your ESP32 (e.g., `iotlamp at 192.168.x.x`)
+- **Tools → Port** — Select the network port for your ESP32 (e.g., `lightplus at 192.168.x.x`)
 - Upload as normal — the IDE compiles and pushes over WiFi.
 
 ### Via command line
@@ -333,6 +359,20 @@ espota.py -i <esp32-ip> -p 3232 --auth=your_ota_password -f firmware.bin
 The OTA handler uses a 120-second timeout (longer than the Arduino IDE default) to accommodate the flash write phase without dropping the connection.
 
 ---
+
+## Testing
+
+An end-to-end WebSocket test suite lives in [`tools/test_ws.mjs`](tools/test_ws.mjs). With a device on the network:
+
+```bash
+node tools/test_ws.mjs 192.168.0.6
+```
+
+It checks HTTP serving, the state broadcast, every command's validation path, and reversible write commands (restoring device state afterwards). It exits non-zero on failure.
+
+## Continuous Integration
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) compiles the firmware on every push and pull request using the ESP32 Arduino core, the public libraries, and the vendored `MyLD2410` copy.
 
 ## License
 

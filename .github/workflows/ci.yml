@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Install ESP32 core
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.11 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+
+      - name: Install libraries
+        run: arduino-cli lib install "FastLED" "ArduinoJson" "ESP Async WebServer"
+
+      - name: Install vendored MyLD2410
+        run: |
+          mkdir -p ~/Arduino/libraries
+          cp -r lib/MyLD2410 ~/Arduino/libraries/
+
+      - name: Stage sketch
+        run: |
+          mkdir -p /tmp/iotlamp
+          cp iotlamp.ino config.h config.cpp pins.h state.h wifi_config.h.example /tmp/iotlamp/
+          cp /tmp/iotlamp/wifi_config.h.example /tmp/iotlamp/wifi_config.h
+          rm /tmp/iotlamp/wifi_config.h.example
+
+      - name: Compile
+        run: arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs /tmp/iotlamp

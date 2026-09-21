@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <FastLED.h>
 #include "pins.h"
 #include "state.h"
@@ -12,16 +13,22 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 
+// #define RADAR_DEBUG 1
+
 // ---------- brightness / color ----------
 
 const uint8_t  DIM_FLOOR           = 10;
 const uint16_t DIM_FLOOR_CCT       = 2200;
 const uint16_t WAKE_PEAK_CCT      = 5000;
+const uint16_t SLEEP_DIM_RAMP_S   = 30;
+const uint16_t LDR_HYSTERESIS     = 200;
+const unsigned long PRESENCE_HOLD_MS = 6000;
 
 // ---------- defaults ----------
 
 const uint8_t  FULL_BRIGHTNESS = 255;
 const uint16_t DEFAULT_CCT     = 2700;
+#define FW_VERSION "1.1.0"
 
 // ---------- globals ----------
 
@@ -64,6 +71,19 @@ Presence      presence_hist[DEBOUNCE];
 uint8_t       presence_i   = 0;
 Presence      confirmed     = Presence::NONE;
 unsigned long g_last_radar  = 0;
+bool          g_radar_online = false;
+unsigned long g_last_radar_reinit = 0;
+uint8_t       g_radar_rx_pin = LD2410_RX_PIN;
+uint8_t       g_radar_tx_pin = LD2410_TX_PIN;
+unsigned long g_radar_last_frame_ms = 0;
+unsigned long g_radar_last_fc = 0;
+unsigned long g_radar_poll_fc = 0;
+unsigned long g_presence_last_seen = 0;
+
+unsigned long g_radar_rx_bytes = 0;
+uint8_t       g_radar_probe[32];
+uint8_t       g_radar_probe_n = 0;
+bool          g_radar_probe_printed = false;
 
 // ---------- led ----------
 
@@ -156,20 +176,31 @@ static bool ota_in_progress = false;
 void setup() {
     Serial.begin(115200);
     delay(800);
-    Serial.println(F("\n=== Smart Lamp ==="));
+    Serial.println(F("\n=== LightPlus ==="));
 
     FastLED.addLeds<LED_TYPE, LED_PIN, LED_COLOR_ORDER>(leds, LED_COUNT);
     FastLED.setBrightness(0);
     FastLED.clear(true);
 
     WiFi.mode(WIFI_STA);
+    wifi_country_t country = {};
+    memcpy(country.cc, "MY", 3);
+    country.schan = 1;
+    country.nchan = 13;
+    country.policy = WIFI_COUNTRY_POLICY_MANUAL;
+    esp_wifi_set_country(&country);
     WiFi.setAutoReconnect(true);
     wifi_connect();
 
     configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
 
     radarSerial.begin(256000, SERIAL_8N1, LD2410_RX_PIN, LD2410_TX_PIN);
-    radar.begin();
+    g_radar_online = radar.begin();
+    Serial.printf("radar: begin %s\n", g_radar_online ? "online" : "OFFLINE");
+    pinMode(LD2410_OUT, INPUT_PULLDOWN);
+#ifdef RADAR_DEBUG
+    radar.debugOn();
+#endif
 
     analogReadResolution(12);
 
@@ -192,6 +223,10 @@ void setup() {
         unsigned int pct = (p * 100) / t;
         if (pct != last) { last = pct; Serial.printf("OTA: %u%%\n", pct); }
     });
+    ArduinoOTA.onEnd([]() {
+        ota_in_progress = false;
+        Serial.println(F("OTA: end"));
+    });
     ArduinoOTA.onError([](ota_error_t e) {
         const char *msg;
         switch (e) {
@@ -202,6 +237,7 @@ void setup() {
             case OTA_END_ERROR:     msg = "end"; break;
             default:                msg = "unknown"; break;
         }
+        ota_in_progress = false;
         Serial.printf("OTA: error [%u] %s\n", e, msg);
     });
 
@@ -216,7 +252,7 @@ void setup() {
 
     wsSock.onEvent(onWsEvent);
     server.addHandler(&wsSock);
-    server.serveStatic("/", LittleFS, "/").setDefaultFile("dashboard.html");
+    server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
     server.begin();
 
     Serial.print(F("WebSocket server started on ws://"));
@@ -234,6 +270,8 @@ void loop() {
         return;
     }
     unsigned long now = millis();
+
+    radarScanPins();
 
     if (WiFi.status() != WL_CONNECTED)
         wifi_connect();
@@ -265,6 +303,27 @@ void loop() {
     if (now - g_last_radar >= RADAR_INTERVAL) {
         poll_radar();
         g_last_radar = now;
+    }
+
+    unsigned long fc = radar.getFrameCount();
+    if (fc != g_radar_last_fc) {
+        g_radar_last_fc = fc;
+        g_radar_last_frame_ms = now;
+    }
+
+    if (g_radar_online && now - g_radar_last_frame_ms >= 5000UL) {
+        Serial.println(F("radar: stream stalled 5s, restarting"));
+        g_radar_online = false;
+    }
+
+    if (!g_radar_online && now - g_last_radar_reinit >= 2000UL) {
+        g_last_radar_reinit = now;
+        radarSerial.end();
+        delay(50);
+        radarSerial.begin(256000, SERIAL_8N1, g_radar_rx_pin, g_radar_tx_pin);
+        g_radar_online = radar.begin();
+        g_radar_last_frame_ms = millis();
+        Serial.printf("radar: reinit %s\n", g_radar_online ? "online" : "still offline");
     }
 
     compute_output();
@@ -357,15 +416,94 @@ void read_ldr() {
     ldr_i = (ldr_i + 1) % LDR_WINDOW;
 
     g_state.ldr_raw = ldr_sum / LDR_WINDOW;
-    g_state.is_dark = g_state.ldr_raw < g_config.dark_threshold;
+    uint16_t thr = g_config.dark_threshold;
+    if (g_state.is_dark)
+        g_state.is_dark = g_state.ldr_raw < (uint16_t)(thr + LDR_HYSTERESIS);
+    else
+        g_state.is_dark = g_state.ldr_raw < thr;
 }
 
 // ================================================================
 //  LD2410C
 // ================================================================
 
+static bool g_radar_scan_done = false;
+
+void radarScanPins() {
+    if (g_radar_scan_done) return;
+    g_radar_scan_done = true;
+
+    int bestPin = -1;
+    unsigned long bestBytes = 0;
+
+    const uint8_t scanPins[] = {LD2410_RX_PIN, LD2410_TX_PIN}; // 16, 17
+    for (uint8_t i = 0; i < sizeof(scanPins); i++) {
+        uint8_t rx = scanPins[i];
+        uint8_t tx = scanPins[(i + 1) % 2];
+        radarSerial.end();
+        delay(50);
+        radarSerial.begin(256000, SERIAL_8N1, rx, tx);
+        unsigned long bytes = 0;
+        uint8_t hex[32];
+        uint8_t hn = 0;
+        unsigned long t = millis() + 1000;
+        while (millis() < t) {
+            int a = radarSerial.available();
+            if (a > 0) {
+                bytes += a;
+                while (a-- > 0) {
+                    uint8_t b = radarSerial.read();
+                    if (hn < sizeof(hex)) hex[hn++] = b;
+                }
+            }
+            delay(10);
+        }
+        Serial.printf("radar scan: RX=GPIO%u -> %lu bytes", rx, bytes);
+        if (hn) {
+            Serial.print(F(" ["));
+            for (uint8_t k = 0; k < hn; k++) Serial.printf("%02X ", hex[k]);
+            Serial.print(F("]"));
+        }
+        Serial.println();
+        if ((long)bytes > (long)bestBytes) {
+            bestBytes = bytes;
+            bestPin = rx;
+        }
+    }
+
+    radarSerial.end();
+    delay(50);
+
+    int rxPin = LD2410_RX_PIN;
+    int txPin = LD2410_TX_PIN;
+    if (bestPin >= 0 && bestBytes >= 32 && bestPin != LD2410_RX_PIN) {
+        rxPin = bestPin;
+        txPin = LD2410_RX_PIN;
+        Serial.printf("radar scan: using RX=GPIO%u TX=GPIO%u (non-standard wiring)\n", rxPin, txPin);
+    } else {
+        Serial.printf("radar scan: using RX=GPIO%u TX=GPIO%u\n", rxPin, txPin);
+    }
+
+    radarSerial.begin(256000, SERIAL_8N1, rxPin, txPin);
+    g_radar_rx_pin = rxPin;
+    g_radar_tx_pin = txPin;
+    g_radar_online = radar.begin();
+    g_radar_last_frame_ms = millis();
+    Serial.printf("radar: begin %s\n", g_radar_online ? "online" : "OFFLINE");
+}
+
 void poll_radar() {
+    int avail = radarSerial.available();
+    g_radar_rx_bytes += avail;
+    while (g_radar_probe_n < sizeof(g_radar_probe) && avail-- > 0)
+        g_radar_probe[g_radar_probe_n++] = radarSerial.read();
+
     radar.check();
+
+    unsigned long fc = radar.getFrameCount();
+    bool fresh = (fc != g_radar_poll_fc);
+    g_radar_poll_fc = fc;
+    if (!fresh) return;
 
     Presence cur = Presence::NONE;
     if (radar.presenceDetected()) {
@@ -396,18 +534,20 @@ void compute_output() {
     // sleep dim overrides all mode logic during dimming phase
     if (g_sleep_dimming) {
         uint32_t elapsed_s = (millis() - g_sleep_dim_start) / 1000;
-        if (elapsed_s >= g_config.bedtime_duration_s) {
+        if (elapsed_s >= SLEEP_DIM_RAMP_S) {
             g_sleep_dimming = false;
             g_manual_bri_active = false;
             g_manual_cct_active = false;
             g_rgb_active = false;
-            g_state.brightness = DIM_FLOOR;
+            setLampMode(LampMode::FORCE_OFF);
+            g_state.brightness = 0;
             g_state.color_temp = DIM_FLOOR_CCT;
             Serial.println(F("sleep: dim complete"));
             return;
         }
-        float p = ease_in_cubic((float)elapsed_s / g_config.bedtime_duration_s);
-        g_state.brightness = g_sleep_start_bri - (uint8_t)((g_sleep_start_bri - DIM_FLOOR) * p);
+        float p = ease_in_cubic((float)elapsed_s / SLEEP_DIM_RAMP_S);
+        if (g_sleep_start_bri > 0)
+            g_state.brightness = g_sleep_start_bri - (uint8_t)(g_sleep_start_bri * p);
         g_state.color_temp = DIM_FLOOR_CCT;
         return;
     }
@@ -424,7 +564,13 @@ void compute_output() {
     }
 
     // AUTO
-    bool should = g_state.is_dark && confirmed != Presence::NONE;
+    if (confirmed != Presence::NONE)
+        g_presence_last_seen = millis();
+
+    bool presence_recent = confirmed != Presence::NONE ||
+        (g_presence_last_seen != 0 && millis() - g_presence_last_seen < PRESENCE_HOLD_MS);
+
+    bool should = g_state.is_dark && presence_recent;
     if (!should) {
         g_state.brightness = 0;
         g_manual_bri_active = false;
@@ -518,6 +664,23 @@ void heartbeat() {
     Serial.print(g_config.dark_threshold);
     Serial.print(F(" win="));
     Serial.print(isInScheduleWindow());
+    Serial.print(F(" rf="));
+    Serial.print(radar.getFrameCount());
+    Serial.print(F(" rs="));
+    Serial.print(radar.getStatus());
+    Serial.print(F(" rok="));
+    Serial.print(g_radar_online);
+    Serial.print(F(" rrx="));
+    Serial.print(g_radar_rx_bytes);
+    Serial.print(F(" out="));
+    Serial.print(digitalRead(LD2410_OUT));
+    if (!g_radar_probe_printed && g_radar_probe_n >= sizeof(g_radar_probe)) {
+        g_radar_probe_printed = true;
+        Serial.print(F("\nradar probe: "));
+        for (uint8_t i = 0; i < g_radar_probe_n; i++)
+            Serial.printf("%02X ", g_radar_probe[i]);
+        Serial.println();
+    }
     Serial.print(F(" t="));
     if (g_time_synced)
         Serial.printf("%02d:%02d", g_timeinfo.tm_hour, g_timeinfo.tm_min);
@@ -583,7 +746,10 @@ int buildStateJSON(char *buf, size_t len) {
         "\"brightness\":%u,\"cct\":%u,\"dark_threshold\":%u,"
         "\"ldr_raw\":%u,\"energy_kwh\":%.6f,\"cost_myr\":%.6f,"
         "\"color_src\":\"%s\",\"rgb_r\":%u,\"rgb_g\":%u,\"rgb_b\":%u,"
-        "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu}",
+        "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu,\"fw\":\"%s\","
+        "\"radar_ok\":%s,\"radar_frames\":%lu,\"radar_status\":%u,\"radar_rx\":%lu,"
+        "\"radar_mdist\":%lu,\"radar_sdist\":%lu,\"radar_msig\":%u,\"radar_ssig\":%u,"
+        "\"radar_out\":%u}",
         g_state.is_dark ? "true" : "false",
         presenceStr(g_state.presence),
         modeStr(g_state.mode),
@@ -600,7 +766,17 @@ int buildStateJSON(char *buf, size_t len) {
         (unsigned long)g_sleep_timer_s,
         (unsigned long)(millis() / 1000),
         isInScheduleWindow() ? "true" : "false",
-        (unsigned long)ts);
+        (unsigned long)ts,
+        FW_VERSION,
+        g_radar_online ? "true" : "false",
+        (unsigned long)radar.getFrameCount(),
+        (unsigned)radar.getStatus(),
+        (unsigned long)g_radar_rx_bytes,
+        (unsigned long)radar.movingTargetDistance(),
+        (unsigned long)radar.stationaryTargetDistance(),
+        (unsigned)radar.movingTargetSignal(),
+        (unsigned)radar.stationaryTargetSignal(),
+        (unsigned)digitalRead(LD2410_OUT));
 }
 
 void wsSendState(AsyncWebSocketClient *client) {
