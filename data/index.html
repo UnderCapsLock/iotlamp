@@ -114,10 +114,24 @@
     <div class="row-end"><button class="btn ghost" id="setThreshBtn">Use current level</button></div>
   </section>
 
+  <section class="card">
+    <div class="row-between"><h2>Schedule</h2><span class="muted small" id="schedText"></span></div>
+    <div class="timeline">
+      <div class="tl-band tl-bed" id="tlBed"></div>
+      <div class="tl-band tl-wake" id="tlWake"></div>
+      <div class="tl-now" id="tlNow"></div>
+    </div>
+    <div class="tl-hours"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>
+  </section>
+
   <details class="card" id="diagCard" open>
     <summary><h2>Live sensor</h2><span class="arrow">&#9654;</span></summary>
     <div class="radar-wrap">
       <canvas id="radarCanvas"></canvas>
+      <div class="radar-legend">
+        <span class="lg lg-moving">Moving</span>
+        <span class="lg lg-still">Still</span>
+      </div>
       <div class="radar-label" id="radarLabel">No one detected</div>
     </div>
     <div class="diag-grid">

@@ -19,6 +19,6 @@
 #define LDR_INTERVAL         200
 #define RADAR_INTERVAL        50
 #define LED_INTERVAL          33
-#define WS_BROADCAST_INTERVAL 2000
+#define WS_BROADCAST_INTERVAL 1000
 #define NTP_INTERVAL_S        3600
 #define HEARTBEAT_INTERVAL    30000

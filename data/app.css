@@ -532,3 +532,72 @@ canvas#radarCanvas { width: 100%; height: 180px; display: block; }
 @media (max-width: 720px) {
   .scenes { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* radar legend */
+.radar-legend {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.radar-legend .lg::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.lg-moving::before { background: #f5a742; box-shadow: 0 0 6px #f5a742; }
+.lg-still::before { background: #5aa9ff; box-shadow: 0 0 6px #5aa9ff; }
+
+/* cct gradient track */
+#cctSlider { background: linear-gradient(90deg, #ff8b2d 0%, #ffc58f 45%, #eef4ff 100%); }
+
+/* schedule timeline */
+.timeline {
+  position: relative;
+  height: 26px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.tl-band { position: absolute; top: 0; bottom: 0; opacity: 0.55; }
+.tl-bed { background: linear-gradient(90deg, #f5a742, #7a4f1a); }
+.tl-wake { background: linear-gradient(90deg, #2f5c8f, #5aa9ff); }
+.tl-now {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.9);
+  border-radius: 2px;
+}
+.tl-hours {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 4px;
+  font-family: ui-monospace, monospace;
+}
+
+/* night mode dim */
+body.night::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  z-index: 40;
+}
+
+/* offline dim */
+main, .topbar { transition: opacity 0.4s, filter 0.4s; }
+body.offline main, body.offline .topbar { opacity: 0.55; filter: grayscale(0.35); }

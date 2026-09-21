@@ -252,6 +252,9 @@ void setup() {
 
     wsSock.onEvent(onWsEvent);
     server.addHandler(&wsSock);
+    server.on("/manifest.webmanifest", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(LittleFS, "/manifest.webmanifest", "application/manifest+json");
+    });
     server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
     server.begin();
 
@@ -694,7 +697,7 @@ void heartbeat() {
 //  WebSocket
 // ================================================================
 
-#define WS_BUF_LEN 512
+#define WS_BUF_LEN 640
 
 const char *presenceStr(Presence p) {
     switch (p) {
@@ -748,6 +751,7 @@ int buildStateJSON(char *buf, size_t len) {
         "\"ldr_raw\":%u,\"energy_kwh\":%.6f,\"cost_myr\":%.6f,"
         "\"color_src\":\"%s\",\"rgb_r\":%u,\"rgb_g\":%u,\"rgb_b\":%u,"
         "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu,\"fw\":\"%s\","
+        "\"bs_h\":%u,\"bs_m\":%u,\"bs_d\":%u,\"ws_h\":%u,\"ws_m\":%u,\"ws_d\":%u,"
         "\"radar_ok\":%s,\"radar_frames\":%lu,\"radar_status\":%u,\"radar_rx\":%lu,"
         "\"radar_mdist\":%lu,\"radar_sdist\":%lu,\"radar_msig\":%u,\"radar_ssig\":%u,"
         "\"radar_out\":%u}",
@@ -769,6 +773,12 @@ int buildStateJSON(char *buf, size_t len) {
         isInScheduleWindow() ? "true" : "false",
         (unsigned long)ts,
         FW_VERSION,
+        g_config.bedtime_start_hour,
+        g_config.bedtime_start_minute,
+        g_config.bedtime_duration_s,
+        g_config.wake_start_hour,
+        g_config.wake_start_minute,
+        g_config.wake_duration_s,
         g_radar_online ? "true" : "false",
         (unsigned long)radar.getFrameCount(),
         (unsigned)radar.getStatus(),
@@ -939,6 +949,8 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client) {
         snprintf(buf, sizeof(buf), "{\"error\":\"unknown command: %s\"}", cmd);
         client->text(buf);
     }
+
+    wsBroadcast();
 }
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,

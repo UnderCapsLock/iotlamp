@@ -4,7 +4,8 @@ const currentState = {
   dark: false, presence: 'none', mode: 'auto', brightness: 0, cct: 2700,
   dark_threshold: 550, ldr_raw: 0, energy_kwh: 0, cost_myr: 0, color_src: 'cct',
   rgb_r: 0, rgb_g: 0, rgb_b: 0, sleep_timer_s: 0, uptime_s: 0, timestamp: 0,
-  in_window: false, fw: '', radar_ok: false, radar_frames: 0, radar_status: 255,
+  in_window: false, fw: '', bs_h: 22, bs_m: 0, bs_d: 3600, ws_h: 6, ws_m: 0, ws_d: 1800,
+  radar_ok: false, radar_frames: 0, radar_status: 255,
   radar_rx: 0, radar_mdist: 0, radar_sdist: 0, radar_msig: 0, radar_ssig: 0, radar_out: 0
 };
 
@@ -21,6 +22,7 @@ let cmdLog = [];
 let ldrHistory = [];
 let targetLvl = 0;
 let shownLvl = 0;
+let lastBrightness = 255;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MAX_LDR_POINTS = 60;
 const RATE_MYR = 0.27;
@@ -72,6 +74,7 @@ function renderLog() {
 function setConn(state, text) {
   $('connDot').className = 'dot ' + state;
   $('connText').textContent = text;
+  document.body.classList.toggle('offline', state === 'offline');
   if (state === 'online') offlineToasted = false;
 }
 
@@ -128,6 +131,7 @@ function handleState(msg) {
     if (msg[k] !== undefined) currentState[k] = msg[k];
 
   if (optimisticMode !== null && msg.mode !== undefined) optimisticMode = null;
+  if (msg.brightness !== undefined && msg.brightness > 0) lastBrightness = msg.brightness;
 
   if (msg.ldr_raw !== undefined) {
     ldrHistory.push(msg.ldr_raw);
@@ -159,13 +163,15 @@ function updateUI() {
 
   // hero
   const briPct = Math.round(s.brightness / 255 * 100);
-  targetLvl = s.brightness / 255;
+  if (optimisticMode === null) targetLvl = s.brightness / 255;
+  else if (optimisticMode === 'force_off') targetLvl = 0;
+  else targetLvl = Math.max(lastBrightness / 255, 0.02);
   let heroState = 'Off';
-  if (mode === 'force_on') heroState = 'Forced On';
-  else if (mode === 'force_off') heroState = 'Forced Off';
+  if (mode === 'force_on') heroState = 'On';
+  else if (mode === 'force_off') heroState = 'Off';
   else if (s.brightness > 0) heroState = 'On';
   $('heroState').textContent = heroState;
-  $('heroSub').textContent = (mode === 'auto' ? 'Auto mode' : 'Manual override') +
+  $('heroSub').textContent = (mode === 'auto' ? 'Auto' : 'Manual') +
     ' · ' + (hasPresence ? (s.presence === 'moving' ? 'movement' : 'still presence') : 'no presence');
 
   // mode segmented
@@ -190,9 +196,9 @@ function updateUI() {
     : '—:—';
 
   // brightness
-  $('briVal').textContent = s.brightness;
-  $('briPct').textContent = briPct + '%';
   if (!sliderDragging) {
+    animateVal($('briVal'), s.brightness, (v) => Math.round(v));
+    animateVal($('briPct'), briPct, (v) => Math.round(v) + '%');
     $('briSlider').value = s.brightness;
     $('briSlider').style.setProperty('--fill', briPct + '%');
   }
@@ -215,8 +221,8 @@ function updateUI() {
     b.classList.toggle('active', s.color_src === 'cct' && +b.dataset.k === s.cct));
 
   // energy
-  $('kwhVal').textContent = (s.energy_kwh || 0).toFixed(5);
-  $('costVal').textContent = (s.cost_myr || 0).toFixed(4);
+  animateVal($('kwhVal'), s.energy_kwh || 0, (v) => v.toFixed(5), 900);
+  animateVal($('costVal'), s.cost_myr || 0, (v) => v.toFixed(4), 900);
 
   // sleep timer
   const tm = s.sleep_timer_s || 0;
@@ -236,6 +242,25 @@ function updateUI() {
   $('dSig').textContent = (s.radar_msig || s.radar_ssig) ? (s.radar_msig + ' / ' + s.radar_ssig) : '—';
   $('dUptime').textContent = fmtUptime(s.uptime_s || 0);
   $('dFw').textContent = fwShort(s.fw);
+
+  // schedule timeline
+  const bs = (s.bs_h || 0) * 3600 + (s.bs_m || 0) * 60;
+  const wsS = (s.ws_h || 0) * 3600 + (s.ws_m || 0) * 60;
+  const band = (el, start, dur) => {
+    el.style.left = (start / 86400 * 100) + '%';
+    el.style.width = Math.max(0.6, Math.min(100 - start / 86400 * 100, dur / 86400 * 100)) + '%';
+  };
+  band($('tlBed'), bs, s.bs_d || 0);
+  band($('tlWake'), wsS, s.ws_d || 0);
+  const nowDate = s.timestamp > 0 ? new Date(s.timestamp * 1000) : new Date();
+  $('tlNow').style.left = ((nowDate.getHours() * 3600 + nowDate.getMinutes() * 60) / 86400 * 100) + '%';
+  const hhmm = (h, m) => String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  $('schedText').textContent = 'Bedtime ' + hhmm(s.bs_h || 0, s.bs_m || 0) + ' +' + Math.round((s.bs_d || 0) / 60) +
+    'm · Wake ' + hhmm(s.ws_h || 0, s.ws_m || 0) + ' +' + Math.round((s.ws_d || 0) / 60) + 'm';
+
+  // night mode
+  const hour = nowDate.getHours();
+  document.body.classList.toggle('night', hour >= 23 || hour < 6);
 
   // ambient tint follows the lamp color
   const col = s.color_src === 'rgb' ? { r: s.rgb_r, g: s.rgb_g, b: s.rgb_b } : kelvinToRGB(s.cct);
@@ -271,6 +296,20 @@ function fmtDist(cm) {
   return cm >= 100 ? (cm / 100).toFixed(1) + ' m' : Math.round(cm) + ' cm';
 }
 
+function animateVal(el, target, fmt, dur = 400) {
+  const from = parseFloat(el.dataset.v || '0');
+  if (from === target) { el.textContent = fmt(target); return; }
+  el.dataset.v = target;
+  const t0 = performance.now();
+  const step = (t) => {
+    const p = Math.min(1, (t - t0) / dur);
+    const v = from + (target - from) * (1 - Math.pow(1 - p, 3));
+    el.textContent = fmt(v);
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function drawRadar() {
   const canvas = $('radarCanvas');
   if (!canvas) return;
@@ -284,51 +323,63 @@ function drawRadar() {
   const w = rect.width, h = rect.height;
   ctx.clearRect(0, 0, w, h);
 
-  const cx = w / 2, cy = h - 14;
-  const maxR = Math.min(w / 2 - 16, h - 26);
-  const MAX_CM = 600;
+  const cx = w / 2, cy = h - 16;
+  const maxR = Math.min(w / 2 - 20, h - 30);
+  const MAX_CM = 300;
   const s = currentState;
 
-  ctx.strokeStyle = 'rgba(139, 147, 167, 0.18)';
-  ctx.lineWidth = 1;
-  [0.33, 0.66, 1].forEach((f) => {
+  [1, 2, 3].forEach((m) => {
+    const r = maxR * m / 3;
+    ctx.strokeStyle = m === 3 ? 'rgba(139, 147, 167, 0.30)' : 'rgba(139, 147, 167, 0.22)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(cx, cy, maxR * f, Math.PI, 2 * Math.PI);
+    ctx.arc(cx, cy, r, Math.PI, 2 * Math.PI);
     ctx.stroke();
+    ctx.fillStyle = 'rgba(139, 147, 167, 0.55)';
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.fillText(m + 'm', cx + r * 0.03 + 4, cy - r + 3);
   });
 
-  ctx.fillStyle = 'rgba(139, 147, 167, 0.45)';
-  ctx.font = '10px ui-monospace, monospace';
-  [2, 4, 6].forEach((m, i) => {
-    const r = maxR * ((i + 1) / 3);
-    ctx.fillText(m + 'm', cx + r * 0.02 + 4, cy - r + 4);
-  });
-
-  const t = (performance.now() % 3000) / 3000;
+  const t = (performance.now() % 2600) / 2600;
   const a = Math.PI + t * Math.PI;
-  const sx = cx + Math.cos(a) * maxR, sy = cy + Math.sin(a) * maxR;
-  const grad = ctx.createLinearGradient(cx, cy, sx, sy);
-  grad.addColorStop(0, 'rgba(245, 167, 66, 0)');
-  grad.addColorStop(1, 'rgba(245, 167, 66, 0.55)');
-  ctx.strokeStyle = grad;
-  ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(cx, cy);
-  ctx.lineTo(sx, sy);
+  ctx.arc(cx, cy, maxR, a - 0.45, a);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(245, 167, 66, 0.08)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(245, 167, 66, 0.75)';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = 'rgba(245, 167, 66, 0.9)';
+  ctx.shadowBlur = 6;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + Math.cos(a) * maxR, cy + Math.sin(a) * maxR);
   ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = 'rgba(139, 147, 167, 0.8)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
+  ctx.fill();
 
   const addTarget = (cm, color, sig) => {
     if (!cm) return;
-    const r = Math.max(8, Math.min(1, cm / MAX_CM) * maxR);
-    const x = cx, y = cy - r;
-    const pulse = Math.sin(performance.now() / 260) * 2;
+    const r = Math.min(1, cm / MAX_CM) * maxR;
+    const x = cx, y = cy - Math.max(12, r);
+    const pulse = 1 + 0.18 * Math.sin(performance.now() / 300);
     ctx.fillStyle = color;
     ctx.shadowColor = color;
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 14;
     ctx.beginPath();
-    ctx.arc(x, y, 4 + pulse * (0.3 + sig / 200), 0, 2 * Math.PI);
+    ctx.arc(x, y, (5 + 2.5 * (sig / 100)) * pulse, 0, 2 * Math.PI);
     ctx.fill();
     ctx.shadowBlur = 0;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, 2 * Math.PI);
+    ctx.stroke();
   };
 
   if (s.radar_status & 1) addTarget(s.radar_mdist, '#f5a742', s.radar_msig);
@@ -368,16 +419,25 @@ function drawLDRChart() {
 
   if (ldrHistory.length < 2) return;
 
-  ctx.strokeStyle = '#5aa9ff';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
   const stepX = w / (MAX_LDR_POINTS - 1);
   const offset = MAX_LDR_POINTS - ldrHistory.length;
-  ldrHistory.forEach((v, i) => {
-    const x = (offset + i) * stepX;
-    const y = h - (v / 4095) * h;
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-  });
+  const pts = ldrHistory.map((v, i) => [(offset + i) * stepX, h - (v / 4095) * h]);
+
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+  ctx.lineTo(pts[pts.length - 1][0], h);
+  ctx.lineTo(pts[0][0], h);
+  ctx.closePath();
+  const fill = ctx.createLinearGradient(0, 0, 0, h);
+  fill.addColorStop(0, 'rgba(90, 169, 255, 0.28)');
+  fill.addColorStop(1, 'rgba(90, 169, 255, 0)');
+  ctx.fillStyle = fill;
+  ctx.fill();
+
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => { i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+  ctx.strokeStyle = '#5aa9ff';
+  ctx.lineWidth = 2;
   ctx.stroke();
 }
 
@@ -399,9 +459,10 @@ setInterval(() => {
 /* ---------- orb animation ---------- */
 
 function orbTick() {
-  const k = reduceMotion ? 1 : 0.055;
-  shownLvl += (targetLvl - shownLvl) * k;
-  if (Math.abs(targetLvl - shownLvl) < 0.002) shownLvl = targetLvl;
+  const diff = targetLvl - shownLvl;
+  if (reduceMotion) shownLvl = targetLvl;
+  else if (Math.abs(diff) < 0.003) shownLvl = targetLvl;
+  else shownLvl += Math.sign(diff) * Math.min(Math.abs(diff) * 0.22, 0.02);
   const lvl = shownLvl;
   const glow = $('orbGlow'), core = $('orbCore');
   glow.style.opacity = (Math.pow(lvl, 0.75) * 0.95).toFixed(3);
@@ -414,13 +475,12 @@ function orbTick() {
 /* ---------- bindings ---------- */
 
 document.querySelectorAll('#modeSeg button').forEach((b) =>
-  b.addEventListener('click', () => {
-    optimisticMode = b.dataset.mode;
-    if (b.dataset.mode === 'force_off') targetLvl = 0;
-    updateUI();
-    sendObj({ cmd: 'override', mode: b.dataset.mode },
-      b.dataset.mode === 'auto' ? 'Auto mode' : b.dataset.mode === 'force_on' ? 'Forced on' : 'Forced off');
-  }));
+    b.addEventListener('click', () => {
+      optimisticMode = b.dataset.mode;
+      updateUI();
+      sendObj({ cmd: 'override', mode: b.dataset.mode },
+        b.dataset.mode === 'auto' ? 'Auto' : b.dataset.mode === 'force_on' ? 'On' : 'Off');
+    }));
 
 const briSlider = $('briSlider');
 briSlider.addEventListener('pointerdown', () => { sliderDragging = true; });
@@ -431,7 +491,9 @@ briSlider.addEventListener('input', () => {
   const v = +briSlider.value;
   targetLvl = v / 255;
   $('briVal').textContent = v;
+  $('briVal').dataset.v = v;
   $('briPct').textContent = Math.round(v / 255 * 100) + '%';
+  $('briPct').dataset.v = Math.round(v / 255 * 100);
   briSlider.style.setProperty('--fill', Math.round(v / 255 * 100) + '%');
   clearTimeout(briDebounce);
   briDebounce = setTimeout(() => sendObj({ cmd: 'set_brightness', value: +briSlider.value }), 200);
