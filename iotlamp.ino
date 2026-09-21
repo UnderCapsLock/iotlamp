@@ -309,6 +309,7 @@ void loop() {
     if (fc != g_radar_last_fc) {
         g_radar_last_fc = fc;
         g_radar_last_frame_ms = now;
+        g_radar_online = true;
     }
 
     if (g_radar_online && now - g_radar_last_frame_ms >= 5000UL) {

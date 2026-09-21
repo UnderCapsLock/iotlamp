@@ -35,16 +35,16 @@
 <main>
   <section class="card hero">
     <div class="hero-left">
-      <div class="orb" id="orb"><div class="orb-core"></div></div>
+      <div class="orb" id="orb"><div class="orb-glow" id="orbGlow"></div><div class="orb-core" id="orbCore"></div></div>
       <div>
         <div class="hero-state" id="heroState">Off</div>
         <div class="hero-sub" id="heroSub">Connecting…</div>
       </div>
     </div>
     <div class="seg" id="modeSeg" role="group" aria-label="Lamp mode">
-      <button data-mode="auto">Auto</button>
-      <button data-mode="force_on">On</button>
-      <button data-mode="force_off">Off</button>
+      <button data-mode="auto" data-tip="Lamp follows the room: lights up only when it is dark and someone is there">Auto</button>
+      <button data-mode="force_on" data-tip="Always on, ignoring sensors and schedule">On</button>
+      <button data-mode="force_off" data-tip="Always off until you switch back to Auto or On">Off</button>
     </div>
   </section>
 
@@ -53,6 +53,11 @@
     <span class="chip" id="chipLight"><span class="chip-k">Light</span><span class="chip-v">--</span></span>
     <span class="chip" id="chipSchedule"><span class="chip-k">Schedule</span><span class="chip-v">--</span></span>
     <span class="chip" id="chipTime"><span class="chip-k">Time</span><span class="chip-v">--:--</span></span>
+  </section>
+
+  <section class="card">
+    <div class="row-between"><h2>Scenes</h2><span class="muted small">One tap to set the mood</span></div>
+    <div class="scenes" id="scenes"></div>
   </section>
 
   <section class="grid2">
@@ -81,7 +86,7 @@
     <div class="card">
       <h2>Energy</h2>
       <div class="bigval"><span id="kwhVal">0.00000</span><span class="unit">kWh</span></div>
-      <div class="muted">RM <span id="costVal">0.0000</span> · ~<span id="wattVal">0.0</span> W</div>
+      <div class="muted">RM <span id="costVal">0.0000</span></div>
       <div class="row-end"><button class="btn ghost" id="resetEnergy">Reset</button></div>
     </div>
     <div class="card">
@@ -102,24 +107,25 @@
 
   <section class="card">
     <div class="row-between">
-      <h2>Ambient light</h2>
-      <span class="muted">raw <span id="ldrLive">--</span> · threshold <span id="ldrThresh">550</span></span>
+      <h2>Room light</h2>
+      <span class="muted">Level <span id="ldrLive">--</span> · dark below <span id="ldrThresh">550</span></span>
     </div>
     <canvas id="ldrChart"></canvas>
-    <div class="row-end"><button class="btn ghost" id="setThreshBtn">Set threshold to current</button></div>
+    <div class="row-end"><button class="btn ghost" id="setThreshBtn">Use current level</button></div>
   </section>
 
-  <details class="card" id="diagCard">
-    <summary><h2>Sensors &amp; diagnostics</h2><span class="arrow">&#9654;</span></summary>
+  <details class="card" id="diagCard" open>
+    <summary><h2>Live sensor</h2><span class="arrow">&#9654;</span></summary>
+    <div class="radar-wrap">
+      <canvas id="radarCanvas"></canvas>
+      <div class="radar-label" id="radarLabel">No one detected</div>
+    </div>
     <div class="diag-grid">
-      <div class="diag-item"><span class="chip-k">Radar</span><b id="dRadar">--</b></div>
-      <div class="diag-item"><span class="chip-k">Frames</span><b id="dFrames">--</b></div>
+      <div class="diag-item"><span class="chip-k">Presence sensor</span><b id="dRadar">--</b></div>
       <div class="diag-item"><span class="chip-k">Distance</span><b id="dDist">--</b></div>
-      <div class="diag-item"><span class="chip-k">Signal</span><b id="dSig">--</b></div>
-      <div class="diag-item"><span class="chip-k">OUT</span><b id="dOut">--</b></div>
-      <div class="diag-item"><span class="chip-k">RX</span><b id="dRx">--</b></div>
-      <div class="diag-item"><span class="chip-k">Uptime</span><b id="dUptime">--</b></div>
-      <div class="diag-item"><span class="chip-k">Firmware</span><b id="dFw">--</b></div>
+      <div class="diag-item"><span class="chip-k">Signal strength</span><b id="dSig">--</b></div>
+      <div class="diag-item"><span class="chip-k">On for</span><b id="dUptime">--</b></div>
+      <div class="diag-item"><span class="chip-k">Version</span><b id="dFw">--</b></div>
     </div>
   </details>
 
@@ -156,10 +162,10 @@
       </div>
     </div>
     <div class="subcard">
-      <h3>Gate sensitivity <span class="muted">LD2410C · 0-100</span></h3>
-      <div class="row"><label>Moving</label><input type="range" id="gateMoving" min="0" max="100" value="30"><span class="val" id="gateMovingVal">30</span></div>
-      <div class="row"><label>Stationary</label><input type="range" id="gateStationary" min="0" max="100" value="40"><span class="val" id="gateStationaryVal">40</span></div>
-      <div class="row-end"><button class="btn primary" id="saveGates">Save thresholds</button></div>
+      <h3>Presence sensitivity</h3>
+      <p class="muted small" style="margin-bottom:10px;">How far away subtle movement is picked up. Higher catches more, but may react to fans or curtains.</p>
+      <div class="seg levels" id="gateLevels"></div>
+      <div class="row-end"><button class="btn primary" id="saveGates">Save sensitivity</button></div>
     </div>
     <div class="subcard">
       <h3>Command log</h3>

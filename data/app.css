@@ -14,6 +14,7 @@
   --r-sm: 10px;
   --pad: 18px;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --lamp-rgb: 245, 167, 66;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -22,7 +23,7 @@ html { -webkit-text-size-adjust: 100%; }
 
 body {
   background: var(--bg);
-  background-image: radial-gradient(1200px 500px at 50% -200px, rgba(245, 167, 66, 0.07), transparent 60%);
+  background-image: radial-gradient(1200px 500px at 50% -200px, rgba(var(--lamp-rgb), 0.09), transparent 60%);
   color: var(--text);
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   padding: 18px 16px 40px;
@@ -125,24 +126,32 @@ h3 { font-size: 13px; font-weight: 600; margin-bottom: 10px; }
 .hero-left { display: flex; align-items: center; gap: 16px; }
 
 .orb {
-  --lvl: 0;
   width: 74px;
   height: 74px;
   border-radius: 50%;
   position: relative;
   flex-shrink: 0;
-  background: radial-gradient(circle at 50% 45%, rgba(245, 167, 66, calc(0.10 + 0.55 * var(--lvl))), rgba(20, 23, 31, 0.9) 68%);
-  box-shadow: 0 0 calc(6px + 34px * var(--lvl)) rgba(245, 167, 66, calc(0.12 + 0.55 * var(--lvl)));
+  background: radial-gradient(circle at 50% 45%, #1b1f2a, #10131a 70%);
   border: 1px solid var(--line);
-  transition: box-shadow 0.6s ease, background 0.6s ease;
+}
+
+.orb-glow {
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--lamp-rgb), 0.8), transparent 68%);
+  filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .orb-core {
   position: absolute;
   inset: 12px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 40%, rgba(255, 216, 150, calc(0.25 + 0.75 * var(--lvl))), rgba(245, 167, 66, calc(0.05 + 0.35 * var(--lvl))));
-  transition: background 0.6s ease;
+  background: radial-gradient(circle at 50% 40%, rgba(var(--lamp-rgb), 0.98), rgba(var(--lamp-rgb), 0.45));
+  box-shadow: inset 0 0 12px rgba(var(--lamp-rgb), 0.55);
+  opacity: 0;
 }
 
 .hero-state { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
@@ -347,7 +356,7 @@ details.card[open] summary { margin-bottom: 14px; }
 .subcard:first-of-type { margin-top: 0; }
 
 /* diagnostics */
-.diag-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.diag-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .diag-item {
   background: var(--card2);
   border: 1px solid var(--line);
@@ -460,4 +469,66 @@ footer {
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+}
+
+/* scenes */
+.scenes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+
+.scene {
+  padding: 14px 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.scene:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+.scene:active { transform: translateY(0); }
+.scene:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* tooltips */
+[data-tip] { position: relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after {
+  content: attr(data-tip);
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 8px);
+  transform: translateX(-50%);
+  background: #1f2430;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--text);
+  width: max-content;
+  max-width: 230px;
+  white-space: normal;
+  z-index: 30;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  text-align: left;
+}
+
+/* radar */
+.radar-wrap {
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 12px 12px 8px;
+  margin-bottom: 12px;
+}
+canvas#radarCanvas { width: 100%; height: 180px; display: block; }
+.radar-label { text-align: center; font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+/* presence levels */
+.seg.levels { width: 100%; display: flex; }
+.seg.levels button { flex: 1; padding: 9px 4px; font-size: 12px; }
+
+@media (max-width: 720px) {
+  .scenes { grid-template-columns: repeat(2, 1fr); }
 }

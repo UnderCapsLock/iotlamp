@@ -19,9 +19,27 @@ let cctDebounce = null;
 let offlineToasted = false;
 let cmdLog = [];
 let ldrHistory = [];
+let targetLvl = 0;
+let shownLvl = 0;
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MAX_LDR_POINTS = 60;
 const RATE_MYR = 0.27;
-const MAX_WATTAGE = 3.0;
+
+const SCENES = [
+  { name: 'Reading', bri: 255, cct: 4000, tip: 'Bright, neutral light for books and screens' },
+  { name: 'Relax', bri: 90, cct: 2700, tip: 'Soft warm glow for winding down' },
+  { name: 'Movie', bri: 30, cct: 2200, tip: 'Very dim warm light so your eyes stay adjusted' },
+  { name: 'Focus', bri: 255, cct: 5000, tip: 'Cool daylight for work and concentration' }
+];
+
+const GATE_LEVELS = [
+  { name: 'Very low', moving: 70, stationary: 80, tip: 'Closest range only — fewest false triggers' },
+  { name: 'Low', moving: 55, stationary: 65, tip: 'Short range — good for small rooms with reflections' },
+  { name: 'Balanced', moving: 40, stationary: 50, tip: 'Recommended setting for most rooms' },
+  { name: 'High', moving: 25, stationary: 35, tip: 'Picks up subtle movement from further away' },
+  { name: 'Very high', moving: 10, stationary: 20, tip: 'Most sensitive — may react to fans or curtains' }
+];
+let gateLevel = 2;
 
 /* ---------- toasts / log ---------- */
 
@@ -132,16 +150,6 @@ function fmtUptime(s) {
   return h > 0 ? h + 'h ' + m + 'm' : m + 'm ' + (s % 60) + 's';
 }
 
-function radarStatusText(st) {
-  switch (st) {
-    case 0: return 'No target';
-    case 1: return 'Moving';
-    case 2: return 'Stationary';
-    case 3: return 'Moving + still';
-    default: return 'No data';
-  }
-}
-
 /* ---------- UI ---------- */
 
 function updateUI() {
@@ -151,7 +159,7 @@ function updateUI() {
 
   // hero
   const briPct = Math.round(s.brightness / 255 * 100);
-  $('orb').style.setProperty('--lvl', (s.brightness / 255).toFixed(2));
+  targetLvl = s.brightness / 255;
   let heroState = 'Off';
   if (mode === 'force_on') heroState = 'Forced On';
   else if (mode === 'force_off') heroState = 'Forced Off';
@@ -167,7 +175,7 @@ function updateUI() {
   // chips
   const pres = $('chipPresence');
   pres.className = 'chip ' + (hasPresence ? 'good' : '');
-  pres.querySelector('.chip-v').textContent = hasPresence ? (s.presence === 'moving' ? 'Moving' : 'Stationary') : 'None';
+  pres.querySelector('.chip-v').textContent = hasPresence ? (s.presence === 'moving' ? 'Moving' : 'Still') : 'None';
 
   const light = $('chipLight');
   light.className = 'chip ' + (s.dark ? 'warn' : '');
@@ -209,7 +217,6 @@ function updateUI() {
   // energy
   $('kwhVal').textContent = (s.energy_kwh || 0).toFixed(5);
   $('costVal').textContent = (s.cost_myr || 0).toFixed(4);
-  $('wattVal').textContent = ((s.brightness / 255) * MAX_WATTAGE).toFixed(1);
 
   // sleep timer
   const tm = s.sleep_timer_s || 0;
@@ -224,16 +231,17 @@ function updateUI() {
   $('setThreshBtn').disabled = s.ldr_raw === 0;
 
   // diagnostics
-  $('dRadar').textContent = s.radar_ok ? 'online' : 'offline';
-  $('dFrames').textContent = s.radar_frames;
-  $('dDist').textContent = s.radar_mdist || s.radar_sdist
-    ? Math.round((s.radar_mdist || s.radar_sdist) / 100 * 100) + ' cm'
-    : '—';
-  $('dSig').textContent = (s.radar_msig || s.radar_ssig) ? (s.radar_msig + '/' + s.radar_ssig) : '—';
-  $('dOut').textContent = s.radar_out ? 'HIGH' : 'low';
-  $('dRx').textContent = s.radar_rx + ' B';
+  $('dRadar').textContent = s.radar_ok ? 'Working' : 'Not responding';
+  $('dDist').textContent = fmtDist(s.radar_mdist || s.radar_sdist);
+  $('dSig').textContent = (s.radar_msig || s.radar_ssig) ? (s.radar_msig + ' / ' + s.radar_ssig) : '—';
   $('dUptime').textContent = fmtUptime(s.uptime_s || 0);
   $('dFw').textContent = fwShort(s.fw);
+
+  // ambient tint follows the lamp color
+  const col = s.color_src === 'rgb' ? { r: s.rgb_r, g: s.rgb_g, b: s.rgb_b } : kelvinToRGB(s.cct);
+  const dim = 0.25 + 0.75 * (s.brightness / 255);
+  document.documentElement.style.setProperty('--lamp-rgb',
+    Math.round(col.r * dim) + ',' + Math.round(col.g * dim) + ',' + Math.round(col.b * dim));
   $('fwVer').textContent = fwShort(s.fw);
   $('footerIp').textContent = $('espIP').value || '—';
 
@@ -242,7 +250,7 @@ function updateUI() {
 
 /* ---------- charts ---------- */
 
-function kelvinToCSS(kelvin) {
+function kelvinToRGB(kelvin) {
   const t = kelvin / 100;
   let r, g, b;
   if (t <= 66) { r = 255; g = 99.4708025861 * Math.log(t) - 161.1195681661; }
@@ -250,7 +258,86 @@ function kelvinToCSS(kelvin) {
   if (t <= 66) { b = t <= 19 ? 0 : 138.5177312231 * Math.log(t - 10) - 305.0447927307; }
   else { b = 255; }
   const c = (v) => Math.round(Math.max(0, Math.min(255, v)));
-  return 'rgb(' + c(r) + ',' + c(g) + ',' + c(b) + ')';
+  return { r: c(r), g: c(g), b: c(b) };
+}
+
+function kelvinToCSS(kelvin) {
+  const { r, g, b } = kelvinToRGB(kelvin);
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+function fmtDist(cm) {
+  if (!cm) return '—';
+  return cm >= 100 ? (cm / 100).toFixed(1) + ' m' : Math.round(cm) + ' cm';
+}
+
+function drawRadar() {
+  const canvas = $('radarCanvas');
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width === 0) return;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const w = rect.width, h = rect.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const cx = w / 2, cy = h - 14;
+  const maxR = Math.min(w / 2 - 16, h - 26);
+  const MAX_CM = 600;
+  const s = currentState;
+
+  ctx.strokeStyle = 'rgba(139, 147, 167, 0.18)';
+  ctx.lineWidth = 1;
+  [0.33, 0.66, 1].forEach((f) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, maxR * f, Math.PI, 2 * Math.PI);
+    ctx.stroke();
+  });
+
+  ctx.fillStyle = 'rgba(139, 147, 167, 0.45)';
+  ctx.font = '10px ui-monospace, monospace';
+  [2, 4, 6].forEach((m, i) => {
+    const r = maxR * ((i + 1) / 3);
+    ctx.fillText(m + 'm', cx + r * 0.02 + 4, cy - r + 4);
+  });
+
+  const t = (performance.now() % 3000) / 3000;
+  const a = Math.PI + t * Math.PI;
+  const sx = cx + Math.cos(a) * maxR, sy = cy + Math.sin(a) * maxR;
+  const grad = ctx.createLinearGradient(cx, cy, sx, sy);
+  grad.addColorStop(0, 'rgba(245, 167, 66, 0)');
+  grad.addColorStop(1, 'rgba(245, 167, 66, 0.55)');
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(sx, sy);
+  ctx.stroke();
+
+  const addTarget = (cm, color, sig) => {
+    if (!cm) return;
+    const r = Math.max(8, Math.min(1, cm / MAX_CM) * maxR);
+    const x = cx, y = cy - r;
+    const pulse = Math.sin(performance.now() / 260) * 2;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.arc(x, y, 4 + pulse * (0.3 + sig / 200), 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+  };
+
+  if (s.radar_status & 1) addTarget(s.radar_mdist, '#f5a742', s.radar_msig);
+  if (s.radar_status & 2) addTarget(s.radar_sdist, '#5aa9ff', s.radar_ssig);
+
+  const parts = [];
+  if ((s.radar_status & 1) && s.radar_mdist) parts.push('Moving at ' + fmtDist(s.radar_mdist));
+  if ((s.radar_status & 2) && s.radar_sdist) parts.push('Still at ' + fmtDist(s.radar_sdist));
+  $('radarLabel').textContent = parts.length ? parts.join(' · ') : (s.radar_ok ? 'No one detected' : 'Sensor offline');
 }
 
 function drawLDRChart() {
@@ -309,11 +396,27 @@ setInterval(() => {
   }
 }, 2000);
 
+/* ---------- orb animation ---------- */
+
+function orbTick() {
+  const k = reduceMotion ? 1 : 0.055;
+  shownLvl += (targetLvl - shownLvl) * k;
+  if (Math.abs(targetLvl - shownLvl) < 0.002) shownLvl = targetLvl;
+  const lvl = shownLvl;
+  const glow = $('orbGlow'), core = $('orbCore');
+  glow.style.opacity = (Math.pow(lvl, 0.75) * 0.95).toFixed(3);
+  glow.style.transform = 'scale(' + (0.85 + 0.3 * lvl).toFixed(3) + ')';
+  core.style.opacity = (0.06 + 0.94 * lvl).toFixed(3);
+  drawRadar();
+  requestAnimationFrame(orbTick);
+}
+
 /* ---------- bindings ---------- */
 
 document.querySelectorAll('#modeSeg button').forEach((b) =>
   b.addEventListener('click', () => {
     optimisticMode = b.dataset.mode;
+    if (b.dataset.mode === 'force_off') targetLvl = 0;
     updateUI();
     sendObj({ cmd: 'override', mode: b.dataset.mode },
       b.dataset.mode === 'auto' ? 'Auto mode' : b.dataset.mode === 'force_on' ? 'Forced on' : 'Forced off');
@@ -326,6 +429,7 @@ window.addEventListener('pointerup', () => {
 });
 briSlider.addEventListener('input', () => {
   const v = +briSlider.value;
+  targetLvl = v / 255;
   $('briVal').textContent = v;
   $('briPct').textContent = Math.round(v / 255 * 100) + '%';
   briSlider.style.setProperty('--fill', Math.round(v / 255 * 100) + '%');
@@ -383,11 +487,36 @@ $('saveWake').addEventListener('click', () => {
   sendObj({ cmd: 'set_wake', start_h: start[0], start_m: start[1], duration_s: dur }, 'Wake ramp saved');
 });
 
-$('gateMoving').addEventListener('input', () => { $('gateMovingVal').textContent = $('gateMoving').value; });
-$('gateStationary').addEventListener('input', () => { $('gateStationaryVal').textContent = $('gateStationary').value; });
+function renderScenes() {
+  $('scenes').innerHTML = SCENES.map((sc, i) =>
+    '<button class="scene" data-i="' + i + '" data-tip="' + sc.tip + '">' + sc.name + '</button>').join('');
+  document.querySelectorAll('.scene').forEach((b) =>
+    b.addEventListener('click', () => {
+      const sc = SCENES[+b.dataset.i];
+      optimisticMode = 'force_on';
+      targetLvl = sc.bri / 255;
+      sendObj({ cmd: 'override', mode: 'force_on' });
+      sendObj({ cmd: 'set_brightness', value: sc.bri });
+      sendObj({ cmd: 'set_cct', value: sc.cct });
+      toast('Scene: ' + sc.name);
+      updateUI();
+    }));
+}
 
-$('saveGates').addEventListener('click', () =>
-  sendObj({ cmd: 'set_gate_params', gate: 255, moving: +$('gateMoving').value, stationary: +$('gateStationary').value }, 'Gate thresholds saved'));
+function renderGateLevels() {
+  $('gateLevels').innerHTML = GATE_LEVELS.map((g, i) =>
+    '<button data-i="' + i + '" data-tip="' + g.tip + '"' + (i === gateLevel ? ' class="active"' : '') + '>' + g.name + '</button>').join('');
+  document.querySelectorAll('#gateLevels button').forEach((b) =>
+    b.addEventListener('click', () => {
+      gateLevel = +b.dataset.i;
+      document.querySelectorAll('#gateLevels button').forEach((x) => x.classList.toggle('active', x === b));
+    }));
+}
+
+$('saveGates').addEventListener('click', () => {
+  const g = GATE_LEVELS[gateLevel];
+  sendObj({ cmd: 'set_gate_params', gate: 255, moving: g.moving, stationary: g.stationary }, 'Sensitivity saved');
+});
 
 $('settingsBtn').addEventListener('click', () => $('settingsSheet').classList.remove('hidden'));
 $('closeSheet').addEventListener('click', () => $('settingsSheet').classList.add('hidden'));
@@ -452,5 +581,8 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   }
 
   window.addEventListener('resize', drawLDRChart);
+  renderScenes();
+  renderGateLevels();
   drawLDRChart();
+  requestAnimationFrame(orbTick);
 })();
