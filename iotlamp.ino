@@ -424,14 +424,14 @@ void loop() {
         g_radar_online = false;
     }
 
-    if (!g_radar_online && now - g_last_radar_reinit >= 2000UL) {
+    if (!g_radar_online && now - g_last_radar_reinit >= 5000UL) {
         g_last_radar_reinit = now;
         radarSerial.end();
         delay(50);
         radarSerial.begin(256000, SERIAL_8N1, g_radar_rx_pin, g_radar_tx_pin);
-        g_radar_online = radar.begin();
         g_radar_last_frame_ms = millis();
-        Serial.printf("radar: reinit %s\n", g_radar_online ? "online" : "still offline");
+        g_radar_poll_fc = radar.getFrameCount();
+        Serial.println(F("radar: uart restarted, waiting for data"));
     }
 
     compute_output();
