@@ -33,6 +33,11 @@ ring a solid 5 V supply (or power the board from a 2 A source). The firmware
 also auto-restarts the radar if its stream stalls, but it cannot fix an
 under-sized supply.
 
+For demos, a **2 A USB powerbank** is an excellent supply: it avoids brownouts
+and keeps the lamp portable (roughly 4–8 h runtime with the ring lit; the
+ESP32 + radar alone draw ≈ 0.35 A). A battery-powered product is out of scope —
+the radar needs continuous power.
+
 ## Upgrades & cost cutting
 
 Current retail BOM ≈ RM50. Options, biggest savings first:
