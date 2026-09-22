@@ -13,6 +13,8 @@ static void applyDefaults() {
     g_config.wake_start_minute    = 0;
     g_config.wake_duration_s      = 1800;
     g_config.dark_threshold       = 550;
+    g_config.presence_hold_s      = 6;
+    g_config.presence_lost        = 0;
 }
 
 void loadConfig() {
@@ -36,6 +38,8 @@ void loadConfig() {
     g_config.wake_start_minute    = prefs.getUChar("ws_m", 0);
     g_config.wake_duration_s      = prefs.getUShort("ws_dur", 1800);
     g_config.dark_threshold       = prefs.getUShort("dark", 550);
+    g_config.presence_hold_s      = prefs.getUShort("ph_s", 6);
+    g_config.presence_lost        = prefs.getUChar("pl_act", 0);
 
     prefs.end();
 
@@ -54,6 +58,8 @@ void saveConfig() {
     prefs.putUChar("ws_m",     g_config.wake_start_minute);
     prefs.putUShort("ws_dur",  g_config.wake_duration_s);
     prefs.putUShort("dark",    g_config.dark_threshold);
+    prefs.putUShort("ph_s",    g_config.presence_hold_s);
+    prefs.putUChar("pl_act",   g_config.presence_lost);
 
     prefs.end();
 
@@ -94,4 +100,15 @@ void setDarkThreshold(uint16_t value) {
     g_config.dark_threshold = value;
     saveConfig();
     Serial.printf("cfg: dark threshold set to %u\n", value);
+}
+
+void setPresenceBehavior(uint16_t holdS, uint8_t lostAction) {
+    if (holdS < 1 || holdS > 300) {
+        Serial.println(F("cfg: presence hold out of range (1-300s)"));
+        return;
+    }
+    g_config.presence_hold_s = holdS;
+    g_config.presence_lost   = (lostAction > 1) ? 1 : lostAction;
+    saveConfig();
+    Serial.printf("cfg: presence hold %us, lost action %u\n", holdS, lostAction);
 }

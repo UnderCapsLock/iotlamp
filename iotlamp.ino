@@ -7,11 +7,13 @@
 #include "wifi_config.h"
 #include "MyLD2410.h"
 #include "config.h"
+#include "logic.h"
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <Preferences.h>
 #include <LittleFS.h>
+#include <DNSServer.h>
 
 // #define RADAR_DEBUG 1
 
@@ -22,13 +24,12 @@ const uint16_t DIM_FLOOR_CCT       = 2200;
 const uint16_t WAKE_PEAK_CCT      = 5000;
 const uint16_t SLEEP_DIM_RAMP_S   = 30;
 const uint16_t LDR_HYSTERESIS     = 200;
-const unsigned long PRESENCE_HOLD_MS = 6000;
 
 // ---------- defaults ----------
 
 const uint8_t  FULL_BRIGHTNESS = 255;
 const uint16_t DEFAULT_CCT     = 2700;
-#define FW_VERSION "1.1.0"
+#define FW_VERSION "1.2.0"
 
 // ---------- globals ----------
 
@@ -99,6 +100,38 @@ unsigned long g_last_ws = 0;
 AsyncWebServer server(80);
 AsyncWebSocket wsSock("/ws");
 
+// ---------- wifi provisioning / auth / diagnostics ----------
+
+DNSServer     g_dns;
+String        g_wifi_ssid;
+String        g_wifi_pass;
+bool          g_setup_ap = false;
+uint8_t       g_wifi_fail_count = 0;
+unsigned long g_last_wifi_attempt = 0;
+bool          g_ldr_fault = false;
+
+struct WsClientAuth {
+    uint32_t id;
+    bool     authed;
+};
+WsClientAuth g_ws_auth[4] = {};
+
+bool clientAuthed(uint32_t id) {
+    if (strlen(WS_TOKEN) == 0) return true;
+    for (auto &a : g_ws_auth) if (a.id == id) return a.authed;
+    return false;
+}
+
+void setClientAuth(uint32_t id, bool authed) {
+    for (auto &a : g_ws_auth) if (a.id == id) { a.authed = authed; return; }
+    for (auto &a : g_ws_auth) if (a.id == 0) { a.id = id; a.authed = authed; return; }
+    g_ws_auth[0] = { id, authed };
+}
+
+void clearClientAuth(uint32_t id) {
+    for (auto &a : g_ws_auth) if (a.id == id) a.id = 0;
+}
+
 // ---------- manual overrides ----------
 
 uint8_t  g_manual_brightness = 255;
@@ -121,35 +154,16 @@ uint32_t      g_sleep_timer_total = 0;
 // ---------- cct -> rgb (Tanner Helland) ----------
 
 CRGB kelvin_to_rgb(uint16_t kelvin) {
-    float t = kelvin / 100.0f;
-
     uint8_t r, g, b;
-
-    if (t <= 66) r = 255;
-    else {
-        r = (uint8_t)constrain(329.698727446f * powf(t - 60, -0.1332047592f), 0.0f, 255.0f);
-        g = (uint8_t)constrain(288.1221695283f * powf(t - 60, -0.0755148492f), 0.0f, 255.0f);
-    }
-
-    if (t <= 66) {
-        g = (uint8_t)constrain(99.4708025861f * logf(t) - 161.1195681661f, 0.0f, 255.0f);
-        if (t <= 19) b = 0;
-        else b = (uint8_t)constrain(138.5177312231f * logf(t - 10) - 305.0447927307f, 0.0f, 255.0f);
-    }
-
-    if (t > 66) b = 255;
-
+    lamp::kelvin_rgb(kelvin, &r, &g, &b);
     return CRGB(r, g, b);
 }
-
-// ---------- easing ----------
-
-static inline float ease_in_cubic(float t)  { return t * t * t; }
-static inline float ease_out_cubic(float t) { float f = t - 1; return f * f * f + 1; }
 
 // ---------- forward decls ----------
 
 void wifi_connect();
+void loadWifiCreds();
+void startSetupAP();
 void sync_ntp();
 void read_ldr();
 void poll_radar();
@@ -163,6 +177,7 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client);
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len);
 bool isInScheduleWindow();
+lamp::ScheduleParams currentScheduleParams();
 void setLampMode(LampMode mode);
 const char *presenceStr(Presence p);
 const char *modeStr(LampMode m);
@@ -190,6 +205,7 @@ void setup() {
     country.policy = WIFI_COUNTRY_POLICY_MANUAL;
     esp_wifi_set_country(&country);
     WiFi.setAutoReconnect(true);
+    loadWifiCreds();
     wifi_connect();
 
     configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC, NTP_SERVER);
@@ -255,6 +271,37 @@ void setup() {
     server.on("/manifest.webmanifest", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(LittleFS, "/manifest.webmanifest", "application/manifest+json");
     });
+    server.on("/wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html",
+            "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>LightPlus Setup</title></head>"
+            "<body style='background:#0b0d12;color:#e8eaf0;font-family:system-ui,sans-serif;padding:24px;max-width:420px;margin:0 auto'>"
+            "<h1 style='font-size:20px'>LightPlus Setup</h1>"
+            "<p style='color:#8b93a7;font-size:14px'>Enter your WiFi network details. The lamp will restart and connect.</p>"
+            "<form method='POST' action='/wifi'>"
+            "<label style='display:block;margin:14px 0 6px;font-size:13px'>Network name (SSID)</label>"
+            "<input name='ssid' required style='width:100%;padding:10px;border-radius:8px;border:1px solid #262b38;background:#14171f;color:#e8eaf0'/>"
+            "<label style='display:block;margin:14px 0 6px;font-size:13px'>Password</label>"
+            "<input name='pass' type='password' style='width:100%;padding:10px;border-radius:8px;border:1px solid #262b38;background:#14171f;color:#e8eaf0'/>"
+            "<button type='submit' style='margin-top:18px;width:100%;padding:12px;border:none;border-radius:8px;background:#f5a742;color:#1a1205;font-weight:700'>Save &amp; restart</button>"
+            "</form></body></html>");
+    });
+    server.on("/wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
+        String s = request->arg("ssid");
+        String p = request->arg("pass");
+        if (s.length() == 0) { request->send(400, "text/plain", "SSID required"); return; }
+        Preferences prefs;
+        prefs.begin(CONFIG_NAMESPACE, false);
+        prefs.putString("w_ssid", s);
+        prefs.putString("w_pass", p);
+        prefs.end();
+        Serial.printf("wifi: saved credentials for '%s', restarting\n", s.c_str());
+        request->send(200, "text/html",
+            "<body style='background:#0b0d12;color:#e8eaf0;font-family:system-ui,sans-serif;padding:24px'>"
+            "<h2>Saved</h2><p>Restarting...</p></body>");
+        delay(600);
+        ESP.restart();
+    });
     server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
     server.begin();
 
@@ -275,6 +322,9 @@ void loop() {
     unsigned long now = millis();
 
     radarScanPins();
+
+    if (g_setup_ap)
+        g_dns.processNextRequest();
 
     if (WiFi.status() != WL_CONNECTED)
         wifi_connect();
@@ -364,23 +414,56 @@ void loop() {
 //  WiFi
 // ================================================================
 
-void wifi_connect() {
-    if (WiFi.status() == WL_CONNECTED) return;
+void loadWifiCreds() {
+    Preferences prefs;
+    prefs.begin(CONFIG_NAMESPACE, true);
+    g_wifi_ssid = prefs.getString("w_ssid", "");
+    g_wifi_pass = prefs.getString("w_pass", "");
+    prefs.end();
+    if (g_wifi_ssid.length() == 0) {
+        g_wifi_ssid = WIFI_SSID;
+        g_wifi_pass = WIFI_PASSWORD;
+        Serial.println(F("wifi: using compile-time credentials"));
+    } else {
+        Serial.printf("wifi: using saved network '%s'\n", g_wifi_ssid.c_str());
+    }
+}
 
-    Serial.print(F("WiFi "));
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+void startSetupAP() {
+    if (g_setup_ap) return;
+    g_setup_ap = true;
+    WiFi.mode(WIFI_AP_STA);
+    WiFi.softAP("LightPlus-Setup");
+    g_dns.start(53, "*", WiFi.softAPIP());
+    Serial.println(F("wifi: setup AP 'LightPlus-Setup' active"));
+    Serial.print(F("wifi: open http://"));
+    Serial.println(WiFi.softAPIP());
+}
+
+void wifi_connect() {
+    if (WiFi.status() == WL_CONNECTED) {
+        g_wifi_fail_count = 0;
+        return;
+    }
+    if (millis() - g_last_wifi_attempt < 15000UL) return;
+    g_last_wifi_attempt = millis();
+
+    Serial.printf("WiFi '%s' ", g_wifi_ssid.c_str());
+    WiFi.begin(g_wifi_ssid.c_str(), g_wifi_pass.c_str());
 
     unsigned long t = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t < 15000UL) {
+    while (WiFi.status() != WL_CONNECTED && millis() - t < 12000UL) {
         delay(400);
         Serial.print(F("."));
     }
 
     if (WiFi.status() == WL_CONNECTED) {
+        g_wifi_fail_count = 0;
         Serial.println(F(" ok"));
         Serial.print(F("  IP ")); Serial.println(WiFi.localIP());
     } else {
-        Serial.println(F(" fail, retrying"));
+        Serial.println(F(" fail"));
+        if (++g_wifi_fail_count >= 3) startSetupAP();
     }
 }
 
@@ -420,6 +503,7 @@ void read_ldr() {
     ldr_i = (ldr_i + 1) % LDR_WINDOW;
 
     g_state.ldr_raw = ldr_sum / LDR_WINDOW;
+    g_ldr_fault = (g_state.ldr_raw <= 3 || g_state.ldr_raw >= 4092);
     uint16_t thr = g_config.dark_threshold;
     if (g_state.is_dark)
         g_state.is_dark = g_state.ldr_raw < (uint16_t)(thr + LDR_HYSTERESIS);
@@ -549,7 +633,7 @@ void compute_output() {
             Serial.println(F("sleep: dim complete"));
             return;
         }
-        float p = ease_in_cubic((float)elapsed_s / SLEEP_DIM_RAMP_S);
+        float p = lamp::ease_in_cubic((float)elapsed_s / SLEEP_DIM_RAMP_S);
         if (g_sleep_start_bri > 0)
             g_state.brightness = g_sleep_start_bri - (uint8_t)(g_sleep_start_bri * p);
         g_state.color_temp = DIM_FLOOR_CCT;
@@ -572,14 +656,19 @@ void compute_output() {
         g_presence_last_seen = millis();
 
     bool presence_recent = confirmed != Presence::NONE ||
-        (g_presence_last_seen != 0 && millis() - g_presence_last_seen < PRESENCE_HOLD_MS);
+        (g_presence_last_seen != 0 && millis() - g_presence_last_seen < (unsigned long)g_config.presence_hold_s * 1000UL);
 
     bool should = g_state.is_dark && presence_recent;
     if (!should) {
-        g_state.brightness = 0;
         g_manual_bri_active = false;
         g_manual_cct_active = false;
         g_rgb_active = false;
+        if (g_config.presence_lost == 1 && g_state.is_dark) {
+            g_state.brightness = DIM_FLOOR;
+            g_state.color_temp = DIM_FLOOR_CCT;
+        } else {
+            g_state.brightness = 0;
+        }
         return;
     }
 
@@ -587,33 +676,10 @@ void compute_output() {
         g_state.brightness = FULL_BRIGHTNESS;
         g_state.color_temp = DEFAULT_CCT;
     } else {
-        uint32_t now = g_timeinfo.tm_hour * 3600 + g_timeinfo.tm_min * 60 + g_timeinfo.tm_sec;
-        uint32_t ws  = g_config.wake_start_hour * 3600 + g_config.wake_start_minute * 60;
-        uint32_t bs  = g_config.bedtime_start_hour * 3600 + g_config.bedtime_start_minute * 60;
-        uint32_t be  = (bs + g_config.bedtime_duration_s) % 86400;
-
-        uint32_t e_ws = (now - ws + 86400) % 86400;
-        uint32_t e_bs = (now - bs + 86400) % 86400;
-
-        if (e_ws < g_config.wake_duration_s) {
-            float p = (float)e_ws / g_config.wake_duration_s;
-            g_state.brightness = DIM_FLOOR + (uint8_t)((FULL_BRIGHTNESS - DIM_FLOOR) * ease_out_cubic(p));
-            g_state.color_temp = DIM_FLOOR_CCT + (uint16_t)((WAKE_PEAK_CCT - DIM_FLOOR_CCT) * p);
-        } else if (e_bs < g_config.bedtime_duration_s) {
-            float p = ease_in_cubic((float)e_bs / g_config.bedtime_duration_s);
-            g_state.brightness = FULL_BRIGHTNESS - (uint8_t)((FULL_BRIGHTNESS - DIM_FLOOR) * p);
-            g_state.color_temp = DEFAULT_CCT - (uint16_t)((DEFAULT_CCT - DIM_FLOOR_CCT) * p);
-        } else {
-            uint32_t gap = (ws - be + 86400) % 86400;
-            uint32_t e_be = (now - be + 86400) % 86400;
-            if (gap > 0 && e_be < gap) {
-                g_state.brightness = DIM_FLOOR;
-                g_state.color_temp = DIM_FLOOR_CCT;
-            } else {
-                g_state.brightness = FULL_BRIGHTNESS;
-                g_state.color_temp = DEFAULT_CCT;
-            }
-        }
+        uint32_t now_s = g_timeinfo.tm_hour * 3600 + g_timeinfo.tm_min * 60 + g_timeinfo.tm_sec;
+        lamp::LampOutput o = lamp::schedule_output(now_s, currentScheduleParams());
+        g_state.brightness = o.brightness;
+        g_state.color_temp = o.cct;
     }
 
     if (g_manual_bri_active) g_state.brightness = g_manual_brightness;
@@ -697,7 +763,7 @@ void heartbeat() {
 //  WebSocket
 // ================================================================
 
-#define WS_BUF_LEN 640
+#define WS_BUF_LEN 768
 
 const char *presenceStr(Presence p) {
     switch (p) {
@@ -722,16 +788,18 @@ LampMode parseMode(const char *s) {
     return LampMode::AUTO;
 }
 
+lamp::ScheduleParams currentScheduleParams() {
+    return lamp::ScheduleParams{
+        g_config.bedtime_start_hour, g_config.bedtime_start_minute, g_config.bedtime_duration_s,
+        g_config.wake_start_hour, g_config.wake_start_minute, g_config.wake_duration_s,
+        DIM_FLOOR, DIM_FLOOR_CCT, FULL_BRIGHTNESS, DEFAULT_CCT, WAKE_PEAK_CCT
+    };
+}
+
 bool isInScheduleWindow() {
     if (!g_time_synced) return false;
-    uint32_t now = g_timeinfo.tm_hour * 3600 + g_timeinfo.tm_min * 60 + g_timeinfo.tm_sec;
-    uint32_t ws  = g_config.wake_start_hour * 3600 + g_config.wake_start_minute * 60;
-    uint32_t be  = (g_config.bedtime_start_hour * 3600 + g_config.bedtime_start_minute * 60
-                     + g_config.bedtime_duration_s) % 86400;
-    uint32_t gap = (ws - be + 86400) % 86400;
-    if (gap == 0) return true;
-    uint32_t e_be = (now - be + 86400) % 86400;
-    return e_be >= gap;
+    uint32_t now_s = g_timeinfo.tm_hour * 3600 + g_timeinfo.tm_min * 60 + g_timeinfo.tm_sec;
+    return lamp::schedule_window_active(now_s, currentScheduleParams());
 }
 
 void setLampMode(LampMode mode) {
@@ -752,6 +820,7 @@ int buildStateJSON(char *buf, size_t len) {
         "\"color_src\":\"%s\",\"rgb_r\":%u,\"rgb_g\":%u,\"rgb_b\":%u,"
         "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu,\"fw\":\"%s\","
         "\"bs_h\":%u,\"bs_m\":%u,\"bs_d\":%u,\"ws_h\":%u,\"ws_m\":%u,\"ws_d\":%u,"
+        "\"ph_s\":%u,\"pl_act\":%u,\"ldr_fault\":%s,\"ap\":%s,"
         "\"radar_ok\":%s,\"radar_frames\":%lu,\"radar_status\":%u,\"radar_rx\":%lu,"
         "\"radar_mdist\":%lu,\"radar_sdist\":%lu,\"radar_msig\":%u,\"radar_ssig\":%u,"
         "\"radar_out\":%u}",
@@ -779,6 +848,10 @@ int buildStateJSON(char *buf, size_t len) {
         g_config.wake_start_hour,
         g_config.wake_start_minute,
         g_config.wake_duration_s,
+        g_config.presence_hold_s,
+        g_config.presence_lost,
+        g_ldr_fault ? "true" : "false",
+        g_setup_ap ? "true" : "false",
         g_radar_online ? "true" : "false",
         (unsigned long)radar.getFrameCount(),
         (unsigned)radar.getStatus(),
@@ -817,6 +890,22 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client) {
     const char *cmd = doc["cmd"];
     if (!cmd) {
         client->text("{\"error\":\"missing cmd field\"}");
+        return;
+    }
+
+    if (strcmp(cmd, "auth") == 0) {
+        const char *tok = doc["token"] | "";
+        if (strlen(WS_TOKEN) > 0 && strcmp(tok, WS_TOKEN) == 0) {
+            setClientAuth(client->id(), true);
+            client->text("{\"result\":\"ok\",\"cmd\":\"auth\"}");
+        } else {
+            client->text("{\"error\":\"bad token\"}");
+        }
+        return;
+    }
+
+    if (!clientAuthed(client->id())) {
+        client->text("{\"error\":\"unauthorized\"}");
         return;
     }
 
@@ -938,6 +1027,17 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client) {
         Serial.printf("ws: set_gate_params gate=%u m=%u s=%u\n", gate, moving, stationary);
         client->text("{\"result\":\"ok\",\"cmd\":\"set_gate_params\"}");
     }
+    else if (strcmp(cmd, "set_presence") == 0) {
+        uint16_t hold = doc["hold_s"] | 0;
+        const char *lost = doc["lost"] | "";
+        if (hold < 1 || hold > 300) {
+            client->text("{\"error\":\"hold_s must be 1-300\"}");
+            return;
+        }
+        setPresenceBehavior(hold, strcmp(lost, "dim") == 0 ? 1 : 0);
+        Serial.printf("ws: set_presence hold=%us lost=%s\n", hold, lost);
+        client->text("{\"result\":\"ok\",\"cmd\":\"set_presence\"}");
+    }
     else if (strcmp(cmd, "reset_energy") == 0) {
         g_state.total_kwh = 0.0f;
         saveEnergy();
@@ -957,15 +1057,16 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
     if (type == WS_EVT_CONNECT) {
         Serial.printf("ws: client %u connected\n", client->id());
+        setClientAuth(client->id(), strlen(WS_TOKEN) == 0);
         wsSendState(client);
     }
     else if (type == WS_EVT_DISCONNECT) {
         Serial.printf("ws: client %u disconnected\n", client->id());
+        clearClientAuth(client->id());
     }
     else if (type == WS_EVT_DATA) {
         AwsFrameInfo *info = (AwsFrameInfo *)arg;
         if (info->final && info->opcode == WS_TEXT && len > 0) {
-            data[len] = 0;
             wsHandleCommand(data, len, client);
         }
     }
