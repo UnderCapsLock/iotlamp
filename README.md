@@ -43,6 +43,10 @@ A presence-aware bedside lamp that turns on only when the room is dark **and** a
 - **Energy tracking** — Estimates kWh consumption from brightness level and calculates cost at the Malaysian residential tariff rate (RM 0.27/kWh). Persisted to flash every 5 minutes.
 - **Radar gate tuning** — Per-gate moving and stationary sensitivity thresholds (0–100) exposed live on the dashboard, so you can exclude reflective objects (TVs, walls) or dial in sensitivity for your space.
 - **Sleep timer** — Configurable countdown (1–120 minutes) after which the lamp dims to floor. Cancel anytime.
+- **Captive-portal setup** — if the saved WiFi network is unreachable, the lamp hosts a `LightPlus-Setup` access point with a web setup page; credentials persist in flash
+- **Optional access token** — set `WS_TOKEN` to require authentication for control commands
+- **Presence behaviour** — configure how long the light lingers after you leave, and whether it fades to a night-light glow instead of switching off
+- **Dashboard languages** — English / Bahasa Malaysia
 
 ---
 
@@ -134,6 +138,7 @@ iotlamp/
 ├── config.h / config.cpp # RuntimeConfig struct, NVS load/save, validation
 ├── pins.h                # GPIO pin assignments and timing constants
 ├── state.h               # LampMode, Presence enums, LampState struct
+├── logic.h               # Pure schedule/easing/kelvin logic (host-testable)
 ├── wifi_config.h         # WiFi credentials (gitignored — not in repo)
 ├── wifi_config.h.example # Template — copy to wifi_config.h and fill in
 ├── data/                 # Web app (uploaded to LittleFS)
@@ -145,12 +150,21 @@ iotlamp/
 │   ├── icon-*.png        #   App icons (192/512/maskable)
 │   └── logo.png          #   Optional brand logo (see Branding & Logos)
 ├── lib/MyLD2410/         # Vendored radar library (used by CI, reference copy)
+├── tests/
+│   └── logic_test.cpp    # Host unit tests for logic.h (run in CI)
+├── docs/
+│   ├── HARDWARE.md       # Wiring, power notes, BOM and cost options
+│   └── INTEGRATIONS.md   # Home Assistant / HomeKit / Matter plan
 ├── tools/
 │   ├── test_ws.mjs       # End-to-end WebSocket test suite
 │   └── README.md         # Tool usage
-├── .github/workflows/ci.yml  # Firmware compile check
+├── .github/workflows/ci.yml       # Compile check + host tests
+├── .github/workflows/release.yml  # Tagged release artifacts
 ├── littlefs.bin          # Generated LittleFS image (gitignored; see tools/README)
 ├── CHANGELOG.md
+├── ROADMAP.md
+├── CONTRIBUTING.md
+├── SECURITY.md
 ├── LICENSE               # MIT
 └── README.md             # This file
 ```
@@ -273,8 +287,11 @@ Each command is a JSON object with a `"cmd"` field.
 | `cancel_sleep_timer` | — | Cancel active sleep timer |
 | `set_gate_params` | `gate` (0–8), `moving` (0–100), `stationary` (0–100) | Set LD2410C gate sensitivity thresholds |
 | `reset_energy` | — | Reset kWh counter to zero |
+| `set_presence` | `hold_s` (1–300), `lost`: `"off"` or `"dim"` | Presence hold time and night-light behaviour |
 
 All commands return `{"result":"ok","cmd":"<command>"}` on success or `{"error":"<message>"}` on failure.
+
+If `WS_TOKEN` is set in `wifi_config.h`, clients must first send `{"cmd":"auth","token":"<token>"}`; other commands are rejected with `{"error":"unauthorized"}` until authenticated. The state broadcast remains readable.
 
 ### State broadcast (server → client, every 2 seconds)
 
@@ -317,6 +334,16 @@ All commands return `{"result":"ok","cmd":"<command>"}` on success or `{"error":
 | `uptime_s` | uint | Device uptime in seconds |
 | `in_window` | bool | Whether current time is inside a schedule window |
 | `timestamp` | uint | Unix epoch (0 if NTP not yet synced) |
+| `fw` | string | Firmware version |
+| `bs_h` / `bs_m` / `bs_d` | uint | Bedtime start hour/minute and duration (s) |
+| `ws_h` / `ws_m` / `ws_d` | uint | Wake start hour/minute and duration (s) |
+| `ph_s` / `pl_act` | uint | Presence hold seconds, lost action (0 = off, 1 = night light) |
+| `ldr_fault` | bool | Light sensor reading looks invalid (open/short) |
+| `ap` | bool | Setup access point is active |
+| `radar_ok` | bool | Radar data stream healthy |
+| `radar_status` | uint | 0 none, 1 moving, 2 stationary, 3 both, 255 invalid |
+| `radar_mdist` / `radar_sdist` | uint | Target distances (cm) |
+| `radar_msig` / `radar_ssig` | uint | Target signal strength (0–100) |
 
 ---
 
@@ -373,6 +400,15 @@ It checks HTTP serving, the state broadcast, every command's validation path, an
 ## Continuous Integration
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) compiles the firmware on every push and pull request using the ESP32 Arduino core, the public libraries, and the vendored `MyLD2410` copy.
+
+## Documentation
+
+| Document | Contents |
+|---|---|
+| [`docs/HARDWARE.md`](docs/HARDWARE.md) | Wiring, power notes, BOM and cost-cutting options |
+| [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | Home Assistant / HomeKit / Matter integration plan |
+| [`ROADMAP.md`](ROADMAP.md) | What's done and what's next |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release history |
 
 ## License
 

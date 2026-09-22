@@ -10,10 +10,10 @@ Verifies a running LightPlus device end-to-end over the network:
 - runs reversible write tests (override, brightness, CCT, RGB, sleep timer) and restores the device state
 
 ```bash
-node tools/test_ws.mjs 192.168.0.6
+node tools/test_ws.mjs 192.168.0.5
 ```
 
-The device IP defaults to `192.168.0.6`. Exits non-zero on failure, so it works in scripts or CI (against a reachable device).
+The device IP defaults to `192.168.0.5`. Exits non-zero on failure, so it works in scripts or CI (against a reachable device).
 
 To build and flash the filesystem image manually:
 

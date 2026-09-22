@@ -1,11 +1,14 @@
-name: build
+name: release
 
 on:
   push:
-  pull_request:
+    tags: ['v*']
+
+permissions:
+  contents: write
 
 jobs:
-  compile:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,21 +28,24 @@ jobs:
           mkdir -p ~/Arduino/libraries
           cp -r lib/MyLD2410 ~/Arduino/libraries/
 
-      - name: Stage sketch
+      - name: Build firmware
         run: |
           mkdir -p /tmp/iotlamp
           cp iotlamp.ino config.h config.cpp pins.h state.h logic.h wifi_config.h.example /tmp/iotlamp/
           cp /tmp/iotlamp/wifi_config.h.example /tmp/iotlamp/wifi_config.h
           rm /tmp/iotlamp/wifi_config.h.example
+          arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs --output-dir /tmp/out /tmp/iotlamp
+          cp /tmp/out/iotlamp.ino.bin lightplus-firmware.bin
 
-      - name: Compile
-        run: arduino-cli compile --fqbn esp32:esp32:esp32:PartitionScheme=min_spiffs /tmp/iotlamp
-
-  host-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Logic tests
+      - name: Build filesystem image
         run: |
-          g++ -std=c++17 -Wall -Wextra -o /tmp/logic_test tests/logic_test.cpp
-          /tmp/logic_test
+          MK=$(find ~/.arduino15/packages/esp32/tools/mklittlefs -type f -name 'mklittlefs' | head -1)
+          chmod +x "$MK"
+          "$MK" -c data -s 0x20000 -p 256 -b 4096 littlefs.bin
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            lightplus-firmware.bin
+            littlefs.bin
+          generate_release_notes: true

@@ -4,7 +4,7 @@
 
 import { readFileSync } from 'node:fs';
 
-const IP = process.argv[2] || '192.168.0.6';
+const IP = process.argv[2] || '192.168.0.5';
 const BASE = `http://${IP}`;
 const results = [];
 const log = (name, ok, detail = '') => {
@@ -103,8 +103,11 @@ await expectErr('reject cct < 2000', { cmd: 'set_cct', value: 1000 });
 await expectErr('reject rgb > 255', { cmd: 'set_rgb', r: 999, g: 0, b: 0 });
 await expectErr('reject sleep > 120 min', { cmd: 'start_sleep_timer', minutes: 200 });
 await expectErr('reject threshold > 4095', { cmd: 'set_dark_threshold', value: 5000 });
+await expectErr('reject presence hold 0', { cmd: 'set_presence', hold_s: 0, lost: 'off' });
 
 const baseThr = lastState.dark_threshold;
+const baseHold = lastState.ph_s || 6;
+const baseLost = lastState.pl_act === 1 ? 'dim' : 'off';
 
 await expectOk('override force_on', { cmd: 'override', mode: 'force_on' });
 await sleep(2500);
@@ -134,6 +137,12 @@ await sleep(2500);
 await expectOk(`restore threshold ${baseThr}`, { cmd: 'set_dark_threshold', value: baseThr });
 await sleep(2500);
 log('threshold restored', lastState.dark_threshold === baseThr);
+await expectOk('set presence behaviour', { cmd: 'set_presence', hold_s: 10, lost: 'off' });
+await sleep(2500);
+log('presence behaviour applied', lastState.ph_s === 10 && lastState.pl_act === 0);
+await expectOk('restore presence behaviour', { cmd: 'set_presence', hold_s: baseHold, lost: baseLost });
+await sleep(2500);
+log('presence behaviour restored', lastState.ph_s === baseHold);
 
 const fails = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - fails}/${results.length} passed, ${fails} failed, ${ackCount} acks`);

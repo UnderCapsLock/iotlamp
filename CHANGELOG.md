@@ -3,6 +3,26 @@
 All notable changes to LightPlus are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
+## [1.2.0] - 2026-09-22
+
+### Added
+- Captive-portal WiFi fallback: if the saved network is unreachable, the lamp starts a `LightPlus-Setup` AP with a `/wifi` setup page (credentials saved to NVS)
+- Optional WebSocket auth token (`WS_TOKEN`, empty = open LAN access)
+- Configurable presence behaviour: hold time (1–300 s) and "night light" mode that dims to the floor instead of switching off
+- Dashboard: EN/Bahasa Malaysia language toggle, WiFi setup banner, LDR fault warning
+- Host unit tests for schedule/easing/kelvin logic (`tests/logic_test.cpp`) wired into CI
+- Release workflow: tagged builds attach `lightplus-firmware.bin` + `littlefs.bin` to GitHub releases
+- Docs: `docs/INTEGRATIONS.md` (Home Assistant / HomeKit / Matter plan), `docs/HARDWARE.md` (wiring, power, BOM), `ROADMAP.md`, `CONTRIBUTING.md`, `SECURITY.md`, issue templates
+
+### Changed
+- Pure schedule logic extracted to `logic.h` (shared by firmware and host tests)
+- Radar "online" state now follows the frame stream, not just init
+- Dark threshold, presence behaviour, WiFi credentials and energy all persist in NVS (config version 3)
+
+### Fixed
+- WebSocket command buffer no longer writes a NUL past the received frame (`data[len] = 0` removed; length-aware JSON parsing)
+- WiFi reconnect attempts are rate-limited instead of blocking the main loop for 15 s per iteration
+
 ## [1.1.0] - 2026-09-21
 
 ### Added
