@@ -141,6 +141,7 @@
       <div class="diag-item"><span class="chip-k" data-i18n="signalStrength">Signal strength</span><b id="dSig">--</b></div>
       <div class="diag-item"><span class="chip-k" data-i18n="onFor">On for</span><b id="dUptime">--</b></div>
       <div class="diag-item"><span class="chip-k" data-i18n="version">Version</span><b id="dFw">--</b></div>
+      <div class="diag-item"><span class="chip-k" data-i18n="mqttShort">MQTT</span><b id="dMqtt">--</b></div>
     </div>
   </details>
 
@@ -228,6 +229,25 @@
         <option value="ms">Bahasa Malaysia</option>
       </select>
     </label>
+    <h2 style="margin-top:18px;" data-i18n="mqtt">MQTT (Home Assistant)</h2>
+    <label class="field" style="flex-direction:row;align-items:center;gap:8px;">
+      <input type="checkbox" id="mqttEn"> <span data-i18n="mqttEnable">Enable MQTT</span>
+    </label>
+    <label class="field"><span data-i18n="mqttHost">Broker host</span>
+      <input type="text" id="mqttHost" placeholder="192.168.1.10" autocomplete="off">
+    </label>
+    <label class="field"><span data-i18n="mqttPort">Port</span>
+      <input type="text" id="mqttPort" value="1883" inputmode="numeric" autocomplete="off">
+    </label>
+    <label class="field"><span data-i18n="mqttUser">Username</span>
+      <input type="text" id="mqttUser" autocomplete="off" placeholder="(unchanged)">
+    </label>
+    <label class="field"><span data-i18n="mqttPass">Password</span>
+      <input type="password" id="mqttPass" autocomplete="off" placeholder="(unchanged)">
+    </label>
+    <div class="row-end">
+      <button class="btn primary" id="saveMqtt" data-i18n="saveMqtt">Save MQTT</button>
+    </div>
     <div class="row-end">
       <button class="btn ghost" id="closeSheet" data-i18n="close">Close</button>
       <button class="btn primary" id="connectBtn" data-i18n="connect">Connect</button>

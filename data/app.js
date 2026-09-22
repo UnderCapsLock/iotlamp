@@ -19,6 +19,9 @@ const I18N = {
     activityLog: 'Activity log', connection: 'Connection', deviceIp: 'Device IP',
     tokenLabel: 'Access token (optional)', language: 'Language', close: 'Close', connect: 'Connect',
     settingsHint: 'Auto-connects when opened from the device. Save the IP here to reconnect from elsewhere.',
+    mqtt: 'MQTT (Home Assistant)', mqttShort: 'MQTT', mqttEnable: 'Enable MQTT', mqttHost: 'Broker host',
+    mqttPort: 'Port', mqttUser: 'Username', mqttPass: 'Password', saveMqtt: 'Save MQTT',
+    mqttSaved: 'MQTT settings saved', connected: 'connected', disabled: 'disabled',
     auto: 'Auto', manual: 'Manual', none: 'None', noPresence: 'no presence', movement: 'movement',
     stillPresence: 'still presence', dark: 'Dark', bright: 'Bright', working: 'Working',
     notResponding: 'Not responding', noOne: 'No one detected', sensorOffline: 'Sensor offline',
@@ -55,6 +58,9 @@ const I18N = {
     activityLog: 'Log aktiviti', connection: 'Sambungan', deviceIp: 'IP peranti',
     tokenLabel: 'Token akses (pilihan)', language: 'Bahasa', close: 'Tutup', connect: 'Sambung',
     settingsHint: 'Sambung automatik apabila dibuka dari peranti. Simpan IP di sini untuk sambung dari tempat lain.',
+    mqtt: 'MQTT (Home Assistant)', mqttShort: 'MQTT', mqttEnable: 'Aktifkan MQTT', mqttHost: 'Hos broker',
+    mqttPort: 'Port', mqttUser: 'Nama pengguna', mqttPass: 'Kata laluan', saveMqtt: 'Simpan MQTT',
+    mqttSaved: 'Tetapan MQTT disimpan', connected: 'bersambung', disabled: 'dimatikan',
     auto: 'Auto', manual: 'Manual', none: 'Tiada', noPresence: 'tiada kehadiran', movement: 'pergerakan',
     stillPresence: 'kehadiran statik', dark: 'Gelap', bright: 'Terang', working: 'Berfungsi',
     notResponding: 'Tidak bertindak', noOne: 'Tiada sesiapa dikesan', sensorOffline: 'Sensor luar talian',
@@ -344,6 +350,11 @@ function updateUI() {
   $('dSig').textContent = (s.radar_msig || s.radar_ssig) ? (s.radar_msig + ' / ' + s.radar_ssig) : '—';
   $('dUptime').textContent = fmtUptime(s.uptime_s || 0);
   $('dFw').textContent = fwShort(s.fw);
+  $('dMqtt').textContent = s.mqtt_on ? t('connected') : (s.mqtt_en ? t('off') : t('disabled'));
+
+  if (document.activeElement !== $('mqttHost')) $('mqttHost').value = s.mqtt_host || '';
+  if (document.activeElement !== $('mqttPort')) $('mqttPort').value = s.mqtt_port || 1883;
+  $('mqttEn').checked = !!s.mqtt_en;
 
   // schedule timeline
   const bs = (s.bs_h || 0) * 3600 + (s.bs_m || 0) * 60;
@@ -697,6 +708,21 @@ $('savePresence').addEventListener('click', () => {
     hold_s: +$('presenceHold').value,
     lost: $('presenceLost').value
   }, t('behaviourSaved'));
+});
+
+$('saveMqtt').addEventListener('click', () => {
+  const msg = {
+    cmd: 'set_mqtt',
+    enabled: $('mqttEn').checked ? 1 : 0,
+    host: $('mqttHost').value.trim(),
+    port: parseInt($('mqttPort').value, 10) || 1883
+  };
+  const u = $('mqttUser').value.trim();
+  const p = $('mqttPass').value;
+  if (u) msg.user = u;
+  if (p) msg.pass = p;
+  sendObj(msg, t('mqttSaved'));
+  $('mqttPass').value = '';
 });
 
 $('settingsBtn').addEventListener('click', () => $('settingsSheet').classList.remove('hidden'));
