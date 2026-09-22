@@ -22,11 +22,11 @@
     <span class="brand-name">LightPlus</span>
   </div>
   <div class="topbar-right">
-    <span class="pill" id="connPill"><span class="dot" id="connDot"></span><span id="connText">Offline</span></span>
+    <span class="pill" id="connPill" aria-live="polite"><span class="dot" id="connDot"></span><span id="connText" data-i18n="offline">Offline</span></span>
     <button class="icon-btn hidden" id="installBtn" aria-label="Install app" title="Install app">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
     </button>
-    <button class="icon-btn" id="settingsBtn" aria-label="Connection settings" title="Connection settings">
+    <button class="icon-btn" id="settingsBtn" aria-label="Settings" title="Settings">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55h.09a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z"/></svg>
     </button>
   </div>
@@ -37,46 +37,46 @@
     <div class="hero-left">
       <div class="orb" id="orb"><div class="orb-glow" id="orbGlow"></div><div class="orb-core" id="orbCore"></div></div>
       <div>
-        <div class="hero-state" id="heroState">Off</div>
-        <div class="hero-sub" id="heroSub">Connecting…</div>
+        <div class="hero-state" id="heroState" data-i18n="off">Off</div>
+        <div class="hero-sub" id="heroSub"></div>
       </div>
     </div>
     <div class="seg" id="modeSeg" role="group" aria-label="Lamp mode">
       <button data-mode="auto" data-tip="Lamp follows the room: lights up only when it is dark and someone is there">Auto</button>
-      <button data-mode="force_on" data-tip="Always on, ignoring sensors and schedule">On</button>
-      <button data-mode="force_off" data-tip="Always off until you switch back to Auto or On">Off</button>
+      <button data-mode="force_on" data-tip="Always on, ignoring sensors and schedule" data-i18n="on">On</button>
+      <button data-mode="force_off" data-tip="Always off until you switch back to Auto or On" data-i18n="off">Off</button>
     </div>
   </section>
 
   <section class="chips">
-    <span class="chip" id="chipPresence"><span class="chip-k">Presence</span><span class="chip-v">--</span></span>
-    <span class="chip" id="chipLight"><span class="chip-k">Light</span><span class="chip-v">--</span></span>
-    <span class="chip" id="chipSchedule"><span class="chip-k">Schedule</span><span class="chip-v">--</span></span>
-    <span class="chip" id="chipTime"><span class="chip-k">Time</span><span class="chip-v">--:--</span></span>
+    <span class="chip" id="chipPresence"><span class="chip-k" data-i18n="presence">Presence</span><span class="chip-v">--</span></span>
+    <span class="chip" id="chipLight"><span class="chip-k" data-i18n="light">Light</span><span class="chip-v">--</span></span>
+    <span class="chip" id="chipSchedule"><span class="chip-k" data-i18n="scheduleChip">Schedule</span><span class="chip-v">--</span></span>
+    <span class="chip" id="chipTime"><span class="chip-k" data-i18n="time">Time</span><span class="chip-v">--:--</span></span>
   </section>
 
   <section class="card">
-    <div class="row-between"><h2>Scenes</h2><span class="muted small">One tap to set the mood</span></div>
+    <div class="row-between"><h2 data-i18n="scenes">Scenes</h2><span class="muted small" data-i18n="oneTap">One tap to set the mood</span></div>
     <div class="scenes" id="scenes"></div>
   </section>
 
   <section class="grid2">
     <div class="card">
-      <h2>Brightness</h2>
+      <h2 data-i18n="brightness">Brightness</h2>
       <div class="bigval"><span id="briVal">0</span><span class="pct" id="briPct">0%</span></div>
       <input type="range" id="briSlider" min="0" max="255" value="0" aria-label="Brightness">
     </div>
     <div class="card">
-      <div class="row-between"><h2>Color</h2><div class="swatch" id="cctSwatch"></div></div>
+      <div class="row-between"><h2 data-i18n="color">Color</h2><div class="swatch" id="cctSwatch"></div></div>
       <div class="cct-label"><span id="cctVal">2700</span> K <span class="muted" id="colorHint"></span></div>
       <input type="range" id="cctSlider" min="2000" max="6500" step="50" value="2700" aria-label="Color temperature">
       <div class="presets">
-        <button class="preset" data-k="2700">Warm</button>
-        <button class="preset" data-k="4000">Cool</button>
-        <button class="preset" data-k="5000">Day</button>
+        <button class="preset" data-k="2700" data-i18n="warm">Warm</button>
+        <button class="preset" data-k="4000" data-i18n="cool">Cool</button>
+        <button class="preset" data-k="5000" data-i18n="day">Day</button>
         <label class="rgbwrap" title="Custom color">
+          <span data-i18n="rgb">RGB</span>
           <input type="color" id="rgbPicker" value="#ffb46b">
-          <span>RGB</span>
         </label>
       </div>
     </div>
@@ -84,14 +84,14 @@
 
   <section class="grid2">
     <div class="card">
-      <h2>Energy</h2>
+      <h2 data-i18n="energy">Energy</h2>
       <div class="bigval"><span id="kwhVal">0.00000</span><span class="unit">kWh</span></div>
       <div class="muted">RM <span id="costVal">0.0000</span></div>
-      <div class="row-end"><button class="btn ghost" id="resetEnergy">Reset</button></div>
+      <div class="row-end"><button class="btn ghost" id="resetEnergy" data-i18n="reset">Reset</button></div>
     </div>
     <div class="card">
-      <h2>Sleep timer</h2>
-      <div class="bigval"><span id="timerDisplay">--:--</span><span class="unit" id="timerState">idle</span></div>
+      <h2 data-i18n="sleepTimer">Sleep timer</h2>
+      <div class="bigval"><span id="timerDisplay">--:--</span><span class="unit" id="timerState" data-i18n="idle">idle</span></div>
       <div class="row">
         <select id="sleepMins">
           <option value="15">15 min</option>
@@ -99,23 +99,24 @@
           <option value="45">45 min</option>
           <option value="60">60 min</option>
         </select>
-        <button class="btn primary" id="sleepStart">Start</button>
-        <button class="btn ghost" id="sleepCancel">Cancel</button>
+        <button class="btn primary" id="sleepStart" data-i18n="start">Start</button>
+        <button class="btn ghost" id="sleepCancel" data-i18n="cancel">Cancel</button>
       </div>
     </div>
   </section>
 
   <section class="card">
     <div class="row-between">
-      <h2>Room light</h2>
-      <span class="muted">Level <span id="ldrLive">--</span> · dark below <span id="ldrThresh">550</span></span>
+      <h2 data-i18n="roomLight">Room light</h2>
+      <span class="muted"><span data-i18n="level">Level</span> <span id="ldrLive">--</span> · <span data-i18n="darkBelow">dark below</span> <span id="ldrThresh">550</span></span>
     </div>
     <canvas id="ldrChart"></canvas>
-    <div class="row-end"><button class="btn ghost" id="setThreshBtn">Use current level</button></div>
+    <div class="muted small hidden" id="ldrWarn" data-i18n="ldrFault"></div>
+    <div class="row-end"><button class="btn ghost" id="setThreshBtn" data-i18n="useCurrent">Use current level</button></div>
   </section>
 
   <section class="card">
-    <div class="row-between"><h2>Schedule</h2><span class="muted small" id="schedText"></span></div>
+    <div class="row-between"><h2 data-i18n="schedule">Schedule</h2><span class="muted small" id="schedText"></span></div>
     <div class="timeline">
       <div class="tl-band tl-bed" id="tlBed"></div>
       <div class="tl-band tl-wake" id="tlWake"></div>
@@ -124,32 +125,32 @@
     <div class="tl-hours"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>12a</span></div>
   </section>
 
-  <details class="card" id="diagCard" open>
-    <summary><h2>Live sensor</h2><span class="arrow">&#9654;</span></summary>
+  <details class="card" id="diagCard">
+    <summary><h2 data-i18n="liveSensor">Live sensor</h2><span class="arrow">&#9654;</span></summary>
     <div class="radar-wrap">
       <canvas id="radarCanvas"></canvas>
       <div class="radar-legend">
-        <span class="lg lg-moving">Moving</span>
-        <span class="lg lg-still">Still</span>
+        <span class="lg lg-moving" data-i18n="moving">Moving</span>
+        <span class="lg lg-still" data-i18n="still">Still</span>
       </div>
-      <div class="radar-label" id="radarLabel">No one detected</div>
+      <div class="radar-label" id="radarLabel"></div>
     </div>
     <div class="diag-grid">
-      <div class="diag-item"><span class="chip-k">Presence sensor</span><b id="dRadar">--</b></div>
-      <div class="diag-item"><span class="chip-k">Distance</span><b id="dDist">--</b></div>
-      <div class="diag-item"><span class="chip-k">Signal strength</span><b id="dSig">--</b></div>
-      <div class="diag-item"><span class="chip-k">On for</span><b id="dUptime">--</b></div>
-      <div class="diag-item"><span class="chip-k">Version</span><b id="dFw">--</b></div>
+      <div class="diag-item"><span class="chip-k" data-i18n="presenceSensor">Presence sensor</span><b id="dRadar">--</b></div>
+      <div class="diag-item"><span class="chip-k" data-i18n="distance">Distance</span><b id="dDist">--</b></div>
+      <div class="diag-item"><span class="chip-k" data-i18n="signalStrength">Signal strength</span><b id="dSig">--</b></div>
+      <div class="diag-item"><span class="chip-k" data-i18n="onFor">On for</span><b id="dUptime">--</b></div>
+      <div class="diag-item"><span class="chip-k" data-i18n="version">Version</span><b id="dFw">--</b></div>
     </div>
   </details>
 
   <details class="card">
-    <summary><h2>Advanced</h2><span class="arrow">&#9654;</span></summary>
+    <summary><h2 data-i18n="advanced">Advanced</h2><span class="arrow">&#9654;</span></summary>
     <div class="grid2">
       <div class="subcard">
-        <h3>Bedtime dim</h3>
-        <div class="row"><label>Start</label><input type="time" id="bedtimeStart" value="22:00" step="60"></div>
-        <div class="row"><label>Ramp</label>
+        <h3 data-i18n="bedtimeDim">Bedtime dim</h3>
+        <div class="row"><label data-i18n="startLabel">Start</label><input type="time" id="bedtimeStart" value="22:00" step="60"></div>
+        <div class="row"><label data-i18n="ramp">Ramp</label>
           <select id="bedtimeDur">
             <option value="10">10 min</option>
             <option value="20">20 min</option>
@@ -158,12 +159,12 @@
             <option value="60" selected>60 min</option>
           </select>
         </div>
-        <button class="btn primary" id="saveBedtime">Save bedtime</button>
+        <button class="btn primary" id="saveBedtime" data-i18n="saveBedtime">Save bedtime</button>
       </div>
       <div class="subcard">
-        <h3>Wake ramp</h3>
-        <div class="row"><label>Start</label><input type="time" id="wakeStart" value="06:00" step="60"></div>
-        <div class="row"><label>Ramp</label>
+        <h3 data-i18n="wakeRamp">Wake ramp</h3>
+        <div class="row"><label data-i18n="startLabel">Start</label><input type="time" id="wakeStart" value="06:00" step="60"></div>
+        <div class="row"><label data-i18n="ramp">Ramp</label>
           <select id="wakeDur">
             <option value="10">10 min</option>
             <option value="20">20 min</option>
@@ -172,17 +173,36 @@
             <option value="60">60 min</option>
           </select>
         </div>
-        <button class="btn primary" id="saveWake">Save wake</button>
+        <button class="btn primary" id="saveWake" data-i18n="saveWake">Save wake</button>
       </div>
     </div>
     <div class="subcard">
-      <h3>Presence sensitivity</h3>
-      <p class="muted small" style="margin-bottom:10px;">How far away subtle movement is picked up. Higher catches more, but may react to fans or curtains.</p>
+      <h3 data-i18n="presenceSensitivity">Presence sensitivity</h3>
+      <p class="muted small" style="margin-bottom:10px;" data-i18n="sensDesc"></p>
       <div class="seg levels" id="gateLevels"></div>
-      <div class="row-end"><button class="btn primary" id="saveGates">Save sensitivity</button></div>
+      <div class="row-end"><button class="btn primary" id="saveGates" data-i18n="saveSensitivity">Save sensitivity</button></div>
     </div>
     <div class="subcard">
-      <h3>Command log</h3>
+      <h3 data-i18n="presenceBehavior">When no one is there</h3>
+      <div class="row"><label data-i18n="holdLabel">Stay on for</label>
+        <select id="presenceHold">
+          <option value="3">3 s</option>
+          <option value="6" selected>6 s</option>
+          <option value="10">10 s</option>
+          <option value="30">30 s</option>
+          <option value="60">60 s</option>
+        </select>
+      </div>
+      <div class="row"><label data-i18n="lostLabel">Then</label>
+        <select id="presenceLost">
+          <option value="off" selected data-i18n="lostOff">Turn off</option>
+          <option value="dim" data-i18n="lostDim">Night light</option>
+        </select>
+      </div>
+      <div class="row-end"><button class="btn primary" id="savePresence" data-i18n="savePresence">Save behaviour</button></div>
+    </div>
+    <div class="subcard">
+      <h3 data-i18n="activityLog">Activity log</h3>
       <div id="logBody" class="log-body"></div>
     </div>
   </details>
@@ -195,19 +215,28 @@
 
 <div class="sheet hidden" id="settingsSheet">
   <div class="sheet-inner">
-    <h2>Connection</h2>
-    <label class="field">Device IP
+    <h2 data-i18n="connection">Connection</h2>
+    <label class="field"><span data-i18n="deviceIp">Device IP</span>
       <input type="text" id="espIP" placeholder="192.168.x.x" inputmode="decimal" autocomplete="off">
     </label>
+    <label class="field"><span data-i18n="tokenLabel">Access token (optional)</span>
+      <input type="text" id="wsToken" autocomplete="off" placeholder="—">
+    </label>
+    <label class="field"><span data-i18n="language">Language</span>
+      <select id="langSel">
+        <option value="en">English</option>
+        <option value="ms">Bahasa Malaysia</option>
+      </select>
+    </label>
     <div class="row-end">
-      <button class="btn ghost" id="closeSheet">Close</button>
-      <button class="btn primary" id="connectBtn">Connect</button>
+      <button class="btn ghost" id="closeSheet" data-i18n="close">Close</button>
+      <button class="btn primary" id="connectBtn" data-i18n="connect">Connect</button>
     </div>
-    <p class="muted small">Auto-connects when opened from the device. Save the IP here to reconnect from elsewhere.</p>
+    <p class="muted small" data-i18n="settingsHint"></p>
   </div>
 </div>
 
-<div id="toasts"></div>
+<div id="toasts" aria-live="polite"></div>
 <script src="app.js"></script>
 </body>
 </html>

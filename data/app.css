@@ -601,3 +601,9 @@ body.night::after {
 /* offline dim */
 main, .topbar { transition: opacity 0.4s, filter 0.4s; }
 body.offline main, body.offline .topbar { opacity: 0.55; filter: grayscale(0.35); }
+
+/* accessibility: comfortable touch targets */
+@media (pointer: coarse) {
+  .btn, .preset, .scene, .seg button, .icon-btn { min-height: 44px; }
+  .rgbwrap { min-height: 44px; }
+}

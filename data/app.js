@@ -1,5 +1,95 @@
 const $ = (id) => document.getElementById(id);
 
+const I18N = {
+  en: {
+    offline: 'Offline', on: 'On', off: 'Off', presence: 'Presence', light: 'Light',
+    scheduleChip: 'Schedule', time: 'Time', scenes: 'Scenes', oneTap: 'One tap to set the mood',
+    brightness: 'Brightness', color: 'Color', warm: 'Warm', cool: 'Cool', day: 'Day', rgb: 'RGB',
+    energy: 'Energy', reset: 'Reset', sleepTimer: 'Sleep timer', idle: 'idle', active: 'active',
+    start: 'Start', cancel: 'Cancel', roomLight: 'Room light', level: 'Level', darkBelow: 'dark below',
+    ldrFault: 'Light sensor reading looks invalid', useCurrent: 'Use current level', schedule: 'Schedule',
+    liveSensor: 'Live sensor', moving: 'Moving', still: 'Still', presenceSensor: 'Presence sensor',
+    distance: 'Distance', signalStrength: 'Signal strength', onFor: 'On for', version: 'Version',
+    advanced: 'Advanced', bedtimeDim: 'Bedtime dim', startLabel: 'Start', ramp: 'Ramp',
+    saveBedtime: 'Save bedtime', wakeRamp: 'Wake ramp', saveWake: 'Save wake',
+    presenceSensitivity: 'Presence sensitivity',
+    sensDesc: 'How far away subtle movement is picked up. Higher catches more, but may react to fans or curtains.',
+    saveSensitivity: 'Save sensitivity', presenceBehavior: 'When no one is there', holdLabel: 'Stay on for',
+    lostLabel: 'Then', lostOff: 'Turn off', lostDim: 'Night light', savePresence: 'Save behaviour',
+    activityLog: 'Activity log', connection: 'Connection', deviceIp: 'Device IP',
+    tokenLabel: 'Access token (optional)', language: 'Language', close: 'Close', connect: 'Connect',
+    settingsHint: 'Auto-connects when opened from the device. Save the IP here to reconnect from elsewhere.',
+    auto: 'Auto', manual: 'Manual', none: 'None', noPresence: 'no presence', movement: 'movement',
+    stillPresence: 'still presence', dark: 'Dark', bright: 'Bright', working: 'Working',
+    notResponding: 'Not responding', noOne: 'No one detected', sensorOffline: 'Sensor offline',
+    sceneReading: 'Reading', sceneRelax: 'Relax', sceneMovie: 'Movie', sceneFocus: 'Focus',
+    tipReading: 'Bright, neutral light for books and screens', tipRelax: 'Soft warm glow for winding down',
+    tipMovie: 'Very dim warm light so your eyes stay adjusted', tipFocus: 'Cool daylight for work and concentration',
+    lvlVeryLow: 'Very low', lvlLow: 'Low', lvlBalanced: 'Balanced', lvlHigh: 'High', lvlVeryHigh: 'Very high',
+    tipLvlVeryLow: 'Closest range only — fewest false triggers',
+    tipLvlLow: 'Short range — good for small rooms with reflections',
+    tipLvlBalanced: 'Recommended setting for most rooms',
+    tipLvlHigh: 'Picks up subtle movement from further away',
+    tipLvlVeryHigh: 'Most sensitive — may react to fans or curtains',
+    notConnected: 'Not connected', sceneSet: 'Scene', sensitivitySaved: 'Sensitivity saved',
+    behaviourSaved: 'Behaviour saved', sleepStarted: 'Sleep timer started', sleepCancelled: 'Sleep timer cancelled',
+    energyReset: 'Energy reset', thresholdUpdated: 'Dark level updated',
+    offlineReconnect: 'Connection lost — reconnecting', setupAp: "Setup mode active — connect to 'LightPlus-Setup' to configure WiFi",
+    unauthorized: 'Not authorised — enter the access token in Settings'
+  },
+  ms: {
+    offline: 'Luar talian', on: 'Hidup', off: 'Mati', presence: 'Kehadiran', light: 'Cahaya',
+    scheduleChip: 'Jadual', time: 'Masa', scenes: 'Adegan', oneTap: 'Satu ketikan untuk suasana',
+    brightness: 'Kecerahan', color: 'Warna', warm: 'Hangat', cool: 'Sejuk', day: 'Siang', rgb: 'RGB',
+    energy: 'Tenaga', reset: 'Set semula', sleepTimer: 'Pemasa tidur', idle: 'sedia', active: 'aktif',
+    start: 'Mula', cancel: 'Batal', roomLight: 'Cahaya bilik', level: 'Tahap', darkBelow: 'gelap di bawah',
+    ldrFault: 'Bacaan sensor cahaya tidak sah', useCurrent: 'Guna tahap semasa', schedule: 'Jadual',
+    liveSensor: 'Sensor langsung', moving: 'Bergerak', still: 'Statik', presenceSensor: 'Sensor kehadiran',
+    distance: 'Jarak', signalStrength: 'Kekuatan isyarat', onFor: 'Hidup selama', version: 'Versi',
+    advanced: 'Lanjutan', bedtimeDim: 'Perapan malam', startLabel: 'Mula', ramp: 'Tempoh',
+    saveBedtime: 'Simpan waktu malam', wakeRamp: 'Ramp bangun', saveWake: 'Simpan waktu bangun',
+    presenceSensitivity: 'Kesensitifan kehadiran',
+    sensDesc: 'Sejauh mana pergerakan halus dikesan. Lebih tinggi lebih sensitif, tetapi mungkin mengesan kipas atau langsir.',
+    saveSensitivity: 'Simpan kesensitifan', presenceBehavior: 'Bila tiada sesiapa', holdLabel: 'Kekal hidup',
+    lostLabel: 'Kemudian', lostOff: 'Matikan', lostDim: 'Lampu malam', savePresence: 'Simpan tingkah laku',
+    activityLog: 'Log aktiviti', connection: 'Sambungan', deviceIp: 'IP peranti',
+    tokenLabel: 'Token akses (pilihan)', language: 'Bahasa', close: 'Tutup', connect: 'Sambung',
+    settingsHint: 'Sambung automatik apabila dibuka dari peranti. Simpan IP di sini untuk sambung dari tempat lain.',
+    auto: 'Auto', manual: 'Manual', none: 'Tiada', noPresence: 'tiada kehadiran', movement: 'pergerakan',
+    stillPresence: 'kehadiran statik', dark: 'Gelap', bright: 'Terang', working: 'Berfungsi',
+    notResponding: 'Tidak bertindak', noOne: 'Tiada sesiapa dikesan', sensorOffline: 'Sensor luar talian',
+    sceneReading: 'Membaca', sceneRelax: 'Santai', sceneMovie: 'Tonton', sceneFocus: 'Fokus',
+    tipReading: 'Cahaya terang neutral untuk buku dan skrin', tipRelax: 'Cahaya hangat lembut untuk bersantai',
+    tipMovie: 'Cahaya hangat malap supaya mata kekal selesa', tipFocus: 'Cahaya siang untuk kerja dan tumpuan',
+    lvlVeryLow: 'Sangat rendah', lvlLow: 'Rendah', lvlBalanced: 'Seimbang', lvlHigh: 'Tinggi', lvlVeryHigh: 'Sangat tinggi',
+    tipLvlVeryLow: 'Jarak paling dekat sahaja — paling kurang penggera palsu',
+    tipLvlLow: 'Jarak dekat — sesuai bilik kecil dengan pantulan',
+    tipLvlBalanced: 'Tetapan disyorkan untuk kebanyakan bilik',
+    tipLvlHigh: 'Mengesan pergerakan halus dari jauh',
+    tipLvlVeryHigh: 'Paling sensitif — mungkin mengesan kipas atau langsir',
+    notConnected: 'Tidak bersambung', sceneSet: 'Adegan', sensitivitySaved: 'Kesensitifan disimpan',
+    behaviourSaved: 'Tingkah laku disimpan', sleepStarted: 'Pemasa tidur bermula', sleepCancelled: 'Pemasa tidur dibatalkan',
+    energyReset: 'Tenaga diset semula', thresholdUpdated: 'Tahap gelap dikemas kini',
+    offlineReconnect: 'Sambungan terputus — menyambung semula', setupAp: "Mod persediaan aktif — sambung ke 'LightPlus-Setup' untuk tetapkan WiFi",
+    unauthorized: 'Tidak dibenarkan — masukkan token akses dalam Tetapan'
+  }
+};
+
+let lang = localStorage.getItem('lightplus_lang') || 'en';
+
+function t(key) {
+  return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  renderScenes();
+  renderGateLevels();
+  updateUI();
+}
+
+
 const currentState = {
   dark: false, presence: 'none', mode: 'auto', brightness: 0, cct: 2700,
   dark_threshold: 550, ldr_raw: 0, energy_kwh: 0, cost_myr: 0, color_src: 'cct',
@@ -18,6 +108,7 @@ let sliderDragging = false;
 let briDebounce = null;
 let cctDebounce = null;
 let offlineToasted = false;
+let apToasted = false;
 let cmdLog = [];
 let ldrHistory = [];
 let targetLvl = 0;
@@ -28,18 +119,18 @@ const MAX_LDR_POINTS = 60;
 const RATE_MYR = 0.27;
 
 const SCENES = [
-  { name: 'Reading', bri: 255, cct: 4000, tip: 'Bright, neutral light for books and screens' },
-  { name: 'Relax', bri: 90, cct: 2700, tip: 'Soft warm glow for winding down' },
-  { name: 'Movie', bri: 30, cct: 2200, tip: 'Very dim warm light so your eyes stay adjusted' },
-  { name: 'Focus', bri: 255, cct: 5000, tip: 'Cool daylight for work and concentration' }
+  { key: 'sceneReading', bri: 255, cct: 4000, tip: 'tipReading' },
+  { key: 'sceneRelax', bri: 90, cct: 2700, tip: 'tipRelax' },
+  { key: 'sceneMovie', bri: 30, cct: 2200, tip: 'tipMovie' },
+  { key: 'sceneFocus', bri: 255, cct: 5000, tip: 'tipFocus' }
 ];
 
 const GATE_LEVELS = [
-  { name: 'Very low', moving: 70, stationary: 80, tip: 'Closest range only — fewest false triggers' },
-  { name: 'Low', moving: 55, stationary: 65, tip: 'Short range — good for small rooms with reflections' },
-  { name: 'Balanced', moving: 40, stationary: 50, tip: 'Recommended setting for most rooms' },
-  { name: 'High', moving: 25, stationary: 35, tip: 'Picks up subtle movement from further away' },
-  { name: 'Very high', moving: 10, stationary: 20, tip: 'Most sensitive — may react to fans or curtains' }
+  { key: 'lvlVeryLow', moving: 70, stationary: 80, tip: 'tipLvlVeryLow' },
+  { key: 'lvlLow', moving: 55, stationary: 65, tip: 'tipLvlLow' },
+  { key: 'lvlBalanced', moving: 40, stationary: 50, tip: 'tipLvlBalanced' },
+  { key: 'lvlHigh', moving: 25, stationary: 35, tip: 'tipLvlHigh' },
+  { key: 'lvlVeryHigh', moving: 10, stationary: 20, tip: 'tipLvlVeryHigh' }
 ];
 let gateLevel = 2;
 
@@ -87,14 +178,28 @@ function connectWS(ip) {
   try { ws = new WebSocket('ws://' + ip + '/ws'); }
   catch { setConn('offline', 'Bad address'); scheduleReconnect(ip); return; }
 
-  ws.onopen = () => { setConn('online', 'Online'); lastHeartbeat = Date.now(); };
+  ws.onopen = () => {
+    setConn('online', 'Online');
+    lastHeartbeat = Date.now();
+    const tok = ($('wsToken') && $('wsToken').value || '').trim();
+    if (tok) ws.send(JSON.stringify({ cmd: 'auth', token: tok }));
+  };
 
   ws.onmessage = (e) => {
     let msg;
     try { msg = JSON.parse(e.data); } catch { logCmd('err', 'bad json'); return; }
     if (msg.result !== undefined || msg.error !== undefined) {
-      if (msg.error) { logCmd('err', 'error: ' + msg.error); toast(msg.error, 'err', 3400); }
-      else { logCmd('recv', 'ack: ' + (msg.cmd || '')); }
+      if (msg.error) {
+        logCmd('err', 'error: ' + msg.error);
+        if (/unauthorized|bad token/i.test(msg.error)) {
+          toast(t('unauthorized'), 'err', 5000);
+          $('settingsSheet').classList.remove('hidden');
+        } else {
+          toast(msg.error, 'err', 3400);
+        }
+      } else {
+        logCmd('recv', 'ack: ' + (msg.cmd || ''));
+      }
       return;
     }
     if (msg.dark !== undefined) { lastHeartbeat = Date.now(); handleState(msg); }
@@ -166,13 +271,10 @@ function updateUI() {
   if (optimisticMode === null) targetLvl = s.brightness / 255;
   else if (optimisticMode === 'force_off') targetLvl = 0;
   else targetLvl = Math.max(lastBrightness / 255, 0.02);
-  let heroState = 'Off';
-  if (mode === 'force_on') heroState = 'On';
-  else if (mode === 'force_off') heroState = 'Off';
-  else if (s.brightness > 0) heroState = 'On';
+  const heroState = (mode === 'force_on' || (mode === 'auto' && s.brightness > 0)) ? t('on') : t('off');
   $('heroState').textContent = heroState;
-  $('heroSub').textContent = (mode === 'auto' ? 'Auto' : 'Manual') +
-    ' · ' + (hasPresence ? (s.presence === 'moving' ? 'movement' : 'still presence') : 'no presence');
+  $('heroSub').textContent = (mode === 'auto' ? t('auto') : t('manual')) +
+    ' · ' + (hasPresence ? (s.presence === 'moving' ? t('movement') : t('stillPresence')) : t('noPresence'));
 
   // mode segmented
   document.querySelectorAll('#modeSeg button').forEach((b) =>
@@ -181,15 +283,15 @@ function updateUI() {
   // chips
   const pres = $('chipPresence');
   pres.className = 'chip ' + (hasPresence ? 'good' : '');
-  pres.querySelector('.chip-v').textContent = hasPresence ? (s.presence === 'moving' ? 'Moving' : 'Still') : 'None';
+  pres.querySelector('.chip-v').textContent = hasPresence ? (s.presence === 'moving' ? t('moving') : t('still')) : t('none');
 
   const light = $('chipLight');
   light.className = 'chip ' + (s.dark ? 'warn' : '');
-  light.querySelector('.chip-v').textContent = s.dark ? 'Dark' : 'Bright';
+  light.querySelector('.chip-v').textContent = s.dark ? t('dark') : t('bright');
 
   const sched = $('chipSchedule');
   sched.className = 'chip ' + (s.in_window ? 'good' : '');
-  sched.querySelector('.chip-v').textContent = s.in_window ? 'Active' : 'Idle';
+  sched.querySelector('.chip-v').textContent = s.in_window ? t('active') : t('idle');
 
   $('chipTime').querySelector('.chip-v').textContent = s.timestamp > 0
     ? new Date(s.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -229,7 +331,7 @@ function updateUI() {
   $('timerDisplay').textContent = tm > 0
     ? Math.floor(tm / 60) + ':' + String(tm % 60).padStart(2, '0')
     : '--:--';
-  $('timerState').textContent = tm > 0 ? 'active' : 'idle';
+  $('timerState').textContent = tm > 0 ? t('active') : t('idle');
 
   // ldr
   $('ldrLive').textContent = s.ldr_raw;
@@ -237,7 +339,7 @@ function updateUI() {
   $('setThreshBtn').disabled = s.ldr_raw === 0;
 
   // diagnostics
-  $('dRadar').textContent = s.radar_ok ? 'Working' : 'Not responding';
+  $('dRadar').textContent = s.radar_ok ? t('working') : t('notResponding');
   $('dDist').textContent = fmtDist(s.radar_mdist || s.radar_sdist);
   $('dSig').textContent = (s.radar_msig || s.radar_ssig) ? (s.radar_msig + ' / ' + s.radar_ssig) : '—';
   $('dUptime').textContent = fmtUptime(s.uptime_s || 0);
@@ -255,12 +357,21 @@ function updateUI() {
   const nowDate = s.timestamp > 0 ? new Date(s.timestamp * 1000) : new Date();
   $('tlNow').style.left = ((nowDate.getHours() * 3600 + nowDate.getMinutes() * 60) / 86400 * 100) + '%';
   const hhmm = (h, m) => String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-  $('schedText').textContent = 'Bedtime ' + hhmm(s.bs_h || 0, s.bs_m || 0) + ' +' + Math.round((s.bs_d || 0) / 60) +
-    'm · Wake ' + hhmm(s.ws_h || 0, s.ws_m || 0) + ' +' + Math.round((s.ws_d || 0) / 60) + 'm';
+  $('schedText').textContent = t('bedtimeDim') + ' ' + hhmm(s.bs_h || 0, s.bs_m || 0) + ' +' + Math.round((s.bs_d || 0) / 60) +
+    'm · ' + t('wakeRamp') + ' ' + hhmm(s.ws_h || 0, s.ws_m || 0) + ' +' + Math.round((s.ws_d || 0) / 60) + 'm';
 
   // night mode
   const hour = nowDate.getHours();
   document.body.classList.toggle('night', hour >= 23 || hour < 6);
+
+  if (s.ap && !apToasted) { apToasted = true; toast(t('setupAp'), 'err', 9000); }
+  if (s.ap === false) apToasted = false;
+  $('ldrWarn').classList.toggle('hidden', !s.ldr_fault);
+
+  if (document.activeElement !== $('presenceHold'))
+    $('presenceHold').value = String(s.ph_s || 6);
+  if (document.activeElement !== $('presenceLost'))
+    $('presenceLost').value = s.pl_act === 1 ? 'dim' : 'off';
 
   // ambient tint follows the lamp color
   const col = s.color_src === 'rgb' ? { r: s.rgb_r, g: s.rgb_g, b: s.rgb_b } : kelvinToRGB(s.cct);
@@ -386,9 +497,9 @@ function drawRadar() {
   if (s.radar_status & 2) addTarget(s.radar_sdist, '#5aa9ff', s.radar_ssig);
 
   const parts = [];
-  if ((s.radar_status & 1) && s.radar_mdist) parts.push('Moving at ' + fmtDist(s.radar_mdist));
-  if ((s.radar_status & 2) && s.radar_sdist) parts.push('Still at ' + fmtDist(s.radar_sdist));
-  $('radarLabel').textContent = parts.length ? parts.join(' · ') : (s.radar_ok ? 'No one detected' : 'Sensor offline');
+  if ((s.radar_status & 1) && s.radar_mdist) parts.push(t('moving') + ' ' + fmtDist(s.radar_mdist));
+  if ((s.radar_status & 2) && s.radar_sdist) parts.push(t('still') + ' ' + fmtDist(s.radar_sdist));
+  $('radarLabel').textContent = parts.length ? parts.join(' · ') : (s.radar_ok ? t('noOne') : t('sensorOffline'));
 }
 
 function drawLDRChart() {
@@ -479,7 +590,7 @@ document.querySelectorAll('#modeSeg button').forEach((b) =>
       optimisticMode = b.dataset.mode;
       updateUI();
       sendObj({ cmd: 'override', mode: b.dataset.mode },
-        b.dataset.mode === 'auto' ? 'Auto' : b.dataset.mode === 'force_on' ? 'On' : 'Off');
+        b.dataset.mode === 'auto' ? t('auto') : b.dataset.mode === 'force_on' ? t('on') : t('off'));
     }));
 
 const briSlider = $('briSlider');
@@ -526,16 +637,16 @@ $('rgbPicker').addEventListener('change', () => {
 });
 
 $('sleepStart').addEventListener('click', () =>
-  sendObj({ cmd: 'start_sleep_timer', minutes: +$('sleepMins').value }, 'Sleep timer started'));
+  sendObj({ cmd: 'start_sleep_timer', minutes: +$('sleepMins').value }, t('sleepStarted')));
 $('sleepCancel').addEventListener('click', () =>
-  sendObj({ cmd: 'cancel_sleep_timer' }, 'Sleep timer cancelled'));
+  sendObj({ cmd: 'cancel_sleep_timer' }, t('sleepCancelled')));
 
 $('resetEnergy').addEventListener('click', () => {
-  if (confirm('Reset energy tracking to zero?')) sendObj({ cmd: 'reset_energy' }, 'Energy reset');
+  if (confirm('Reset energy tracking to zero?')) sendObj({ cmd: 'reset_energy' }, t('energyReset'));
 });
 
 $('setThreshBtn').addEventListener('click', () =>
-  sendObj({ cmd: 'set_dark_threshold', value: currentState.ldr_raw }, 'Threshold updated'));
+  sendObj({ cmd: 'set_dark_threshold', value: currentState.ldr_raw }, t('thresholdUpdated')));
 
 $('saveBedtime').addEventListener('click', () => {
   const start = $('bedtimeStart').value.split(':').map(Number);
@@ -551,7 +662,7 @@ $('saveWake').addEventListener('click', () => {
 
 function renderScenes() {
   $('scenes').innerHTML = SCENES.map((sc, i) =>
-    '<button class="scene" data-i="' + i + '" data-tip="' + sc.tip + '">' + sc.name + '</button>').join('');
+    '<button class="scene" data-i="' + i + '" data-tip="' + t(sc.tip) + '">' + t(sc.key) + '</button>').join('');
   document.querySelectorAll('.scene').forEach((b) =>
     b.addEventListener('click', () => {
       const sc = SCENES[+b.dataset.i];
@@ -560,14 +671,14 @@ function renderScenes() {
       sendObj({ cmd: 'override', mode: 'force_on' });
       sendObj({ cmd: 'set_brightness', value: sc.bri });
       sendObj({ cmd: 'set_cct', value: sc.cct });
-      toast('Scene: ' + sc.name);
+      toast(t('sceneSet') + ': ' + t(sc.key));
       updateUI();
     }));
 }
 
 function renderGateLevels() {
   $('gateLevels').innerHTML = GATE_LEVELS.map((g, i) =>
-    '<button data-i="' + i + '" data-tip="' + g.tip + '"' + (i === gateLevel ? ' class="active"' : '') + '>' + g.name + '</button>').join('');
+    '<button data-i="' + i + '" data-tip="' + t(g.tip) + '"' + (i === gateLevel ? ' class="active"' : '') + '>' + t(g.key) + '</button>').join('');
   document.querySelectorAll('#gateLevels button').forEach((b) =>
     b.addEventListener('click', () => {
       gateLevel = +b.dataset.i;
@@ -577,7 +688,15 @@ function renderGateLevels() {
 
 $('saveGates').addEventListener('click', () => {
   const g = GATE_LEVELS[gateLevel];
-  sendObj({ cmd: 'set_gate_params', gate: 255, moving: g.moving, stationary: g.stationary }, 'Sensitivity saved');
+  sendObj({ cmd: 'set_gate_params', gate: 255, moving: g.moving, stationary: g.stationary }, t('sensitivitySaved'));
+});
+
+$('savePresence').addEventListener('click', () => {
+  sendObj({
+    cmd: 'set_presence',
+    hold_s: +$('presenceHold').value,
+    lost: $('presenceLost').value
+  }, t('behaviourSaved'));
 });
 
 $('settingsBtn').addEventListener('click', () => $('settingsSheet').classList.remove('hidden'));
@@ -596,8 +715,15 @@ $('connectBtn').addEventListener('click', () => {
   const ip = $('espIP').value.trim();
   if (!ip) { toast('Enter the device IP', 'err'); return; }
   localStorage.setItem('lightplus_ip', ip);
+  localStorage.setItem('lightplus_token', ($('wsToken').value || '').trim());
   $('settingsSheet').classList.add('hidden');
   connectWS(ip);
+});
+
+$('langSel').addEventListener('change', () => {
+  lang = $('langSel').value;
+  localStorage.setItem('lightplus_lang', lang);
+  applyLang();
 });
 
 /* ---------- PWA ---------- */
@@ -628,6 +754,9 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   const saved = localStorage.getItem('lightplus_ip');
   const host = window.location.hostname;
 
+  $('langSel').value = lang;
+  $('wsToken').value = localStorage.getItem('lightplus_token') || '';
+
   if (saved) ipField.value = saved;
 
   if (saved && saved !== host) {
@@ -643,8 +772,7 @@ if ('serviceWorker' in navigator && window.isSecureContext) {
   }
 
   window.addEventListener('resize', drawLDRChart);
-  renderScenes();
-  renderGateLevels();
+  applyLang();
   drawLDRChart();
   requestAnimationFrame(orbTick);
 })();
