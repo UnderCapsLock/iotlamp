@@ -14,6 +14,7 @@
 #include <Preferences.h>
 #include <LittleFS.h>
 #include <DNSServer.h>
+#include <PubSubClient.h>
 
 // #define RADAR_DEBUG 1
 
@@ -29,7 +30,7 @@ const uint16_t LDR_HYSTERESIS     = 200;
 
 const uint8_t  FULL_BRIGHTNESS = 255;
 const uint16_t DEFAULT_CCT     = 2700;
-#define FW_VERSION "1.2.0"
+#define FW_VERSION "1.3.0"
 
 // ---------- globals ----------
 
@@ -132,6 +133,25 @@ void clearClientAuth(uint32_t id) {
     for (auto &a : g_ws_auth) if (a.id == id) a.id = 0;
 }
 
+// ---------- mqtt (home assistant) ----------
+
+WiFiClient   mqttNet;
+PubSubClient mqtt(mqttNet);
+
+char  g_device_id[16]        = "lp000000";
+char  g_topic_state[48]      = "";
+char  g_topic_ha_state[48]   = "";
+char  g_topic_set[48]        = "";
+char  g_topic_avail[48]      = "";
+char  g_topic_disc_light[64] = "";
+char  g_topic_disc_occ[64]   = "";
+char  g_topic_disc_ldr[64]   = "";
+char  g_topic_disc_dist[64]  = "";
+char  g_topic_disc_energy[64] = "";
+unsigned long g_last_mqtt_try = 0;
+unsigned long g_last_mqtt_pub = 0;
+char          g_mqtt_fp[80]   = "";
+
 // ---------- manual overrides ----------
 
 uint8_t  g_manual_brightness = 255;
@@ -183,6 +203,11 @@ const char *presenceStr(Presence p);
 const char *modeStr(LampMode m);
 void saveEnergy();
 void loadEnergy();
+void mqtt_loop();
+void mqtt_connect();
+void mqtt_publish_discovery();
+void mqtt_publish_state();
+void mqttCallback(char *topic, byte *payload, unsigned int length);
 
 // ================================================================
 
@@ -222,6 +247,24 @@ void setup() {
 
     loadConfig();
     loadEnergy();
+
+    {
+        uint8_t mac[6];
+        WiFi.macAddress(mac);
+        snprintf(g_device_id, sizeof(g_device_id), "lp%02x%02x%02x", mac[3], mac[4], mac[5]);
+        snprintf(g_topic_state, sizeof(g_topic_state), "lightplus/%s/state", g_device_id);
+        snprintf(g_topic_ha_state, sizeof(g_topic_ha_state), "lightplus/%s/ha/state", g_device_id);
+        snprintf(g_topic_set, sizeof(g_topic_set), "lightplus/%s/ha/set", g_device_id);
+        snprintf(g_topic_avail, sizeof(g_topic_avail), "lightplus/%s/availability", g_device_id);
+        snprintf(g_topic_disc_light, sizeof(g_topic_disc_light), "homeassistant/light/%s_light/config", g_device_id);
+        snprintf(g_topic_disc_occ, sizeof(g_topic_disc_occ), "homeassistant/binary_sensor/%s_occupancy/config", g_device_id);
+        snprintf(g_topic_disc_ldr, sizeof(g_topic_disc_ldr), "homeassistant/sensor/%s_light_level/config", g_device_id);
+        snprintf(g_topic_disc_dist, sizeof(g_topic_disc_dist), "homeassistant/sensor/%s_distance/config", g_device_id);
+        snprintf(g_topic_disc_energy, sizeof(g_topic_disc_energy), "homeassistant/sensor/%s_energy/config", g_device_id);
+        mqtt.setCallback(mqttCallback);
+        mqtt.setBufferSize(1024);
+        Serial.printf("mqtt: device id %s\n", g_device_id);
+    }
 
     delay(2000);
     sync_ntp();
@@ -401,6 +444,8 @@ void loop() {
         wsBroadcast();
         g_last_ws = now;
     }
+
+    mqtt_loop();
 
     ArduinoOTA.handle();
 
@@ -821,6 +866,7 @@ int buildStateJSON(char *buf, size_t len) {
         "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu,\"fw\":\"%s\","
         "\"bs_h\":%u,\"bs_m\":%u,\"bs_d\":%u,\"ws_h\":%u,\"ws_m\":%u,\"ws_d\":%u,"
         "\"ph_s\":%u,\"pl_act\":%u,\"ldr_fault\":%s,\"ap\":%s,"
+        "\"id\":\"%s\",\"mqtt_en\":%u,\"mqtt_on\":%s,\"mqtt_host\":\"%s\",\"mqtt_port\":%u,"
         "\"radar_ok\":%s,\"radar_frames\":%lu,\"radar_status\":%u,\"radar_rx\":%lu,"
         "\"radar_mdist\":%lu,\"radar_sdist\":%lu,\"radar_msig\":%u,\"radar_ssig\":%u,"
         "\"radar_out\":%u}",
@@ -852,6 +898,11 @@ int buildStateJSON(char *buf, size_t len) {
         g_config.presence_lost,
         g_ldr_fault ? "true" : "false",
         g_setup_ap ? "true" : "false",
+        g_device_id,
+        g_config.mqtt_enabled,
+        mqtt.connected() ? "true" : "false",
+        g_config.mqtt_host,
+        g_config.mqtt_port,
         g_radar_online ? "true" : "false",
         (unsigned long)radar.getFrameCount(),
         (unsigned)radar.getStatus(),
@@ -1038,6 +1089,25 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client) {
         Serial.printf("ws: set_presence hold=%us lost=%s\n", hold, lost);
         client->text("{\"result\":\"ok\",\"cmd\":\"set_presence\"}");
     }
+    else if (strcmp(cmd, "set_mqtt") == 0) {
+        uint8_t en = doc["enabled"] | 0;
+        const char *host = doc["host"] | "";
+        uint16_t port = doc["port"] | 1883;
+        if (strlen(host) > 63) {
+            client->text("{\"error\":\"host too long\"}");
+            return;
+        }
+        char u[32], p[32];
+        const char *user = doc["user"];
+        const char *pass = doc["pass"];
+        strlcpy(u, user ? user : g_config.mqtt_user, sizeof(u));
+        strlcpy(p, pass ? pass : g_config.mqtt_pass, sizeof(p));
+        setMqttConfig(en, host, port, u, p);
+        if (mqtt.connected()) mqtt.disconnect();
+        g_last_mqtt_try = 0;
+        Serial.println(F("ws: set_mqtt"));
+        client->text("{\"result\":\"ok\",\"cmd\":\"set_mqtt\"}");
+    }
     else if (strcmp(cmd, "reset_energy") == 0) {
         g_state.total_kwh = 0.0f;
         saveEnergy();
@@ -1068,6 +1138,217 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
         AwsFrameInfo *info = (AwsFrameInfo *)arg;
         if (info->final && info->opcode == WS_TEXT && len > 0) {
             wsHandleCommand(data, len, client);
+        }
+    }
+}
+
+// ================================================================
+//  MQTT (Home Assistant)
+// ================================================================
+
+void mqtt_connect() {
+    mqtt.setServer(g_config.mqtt_host, g_config.mqtt_port);
+    const char *user = g_config.mqtt_user[0] ? g_config.mqtt_user : nullptr;
+    const char *pass = g_config.mqtt_pass[0] ? g_config.mqtt_pass : nullptr;
+    char clientId[32];
+    snprintf(clientId, sizeof(clientId), "lightplus_%s", g_device_id);
+    Serial.printf("mqtt: connecting to %s:%u\n", g_config.mqtt_host, g_config.mqtt_port);
+    bool ok = mqtt.connect(clientId, user, pass, g_topic_avail, 0, true, "offline");
+    if (!ok) {
+        Serial.printf("mqtt: failed rc=%d\n", mqtt.state());
+        return;
+    }
+    Serial.println(F("mqtt: connected"));
+    mqtt.publish(g_topic_avail, "online", true);
+    mqtt.subscribe(g_topic_set);
+    mqtt_publish_discovery();
+    mqtt_publish_state();
+    g_mqtt_fp[0] = 0;
+}
+
+void mqtt_publish_discovery() {
+    char buf[768];
+
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"Light\",\"unique_id\":\"%s_light\",\"schema\":\"json\","
+        "\"state_topic\":\"%s\",\"command_topic\":\"%s\","
+        "\"supported_color_modes\":[\"color_temp\",\"rgb\"],\"brightness\":true,"
+        "\"availability_topic\":\"%s\",\"icon\":\"mdi:ceiling-light\","
+        "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"LightPlus\","
+        "\"manufacturer\":\"LightPlus\",\"model\":\"ESP32 presence lamp\",\"sw_version\":\"%s\"}}",
+        g_device_id, g_topic_ha_state, g_topic_set, g_topic_avail, g_device_id, FW_VERSION);
+    mqtt.publish(g_topic_disc_light, buf, true);
+
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"Occupancy\",\"unique_id\":\"%s_occupancy\",\"state_topic\":\"%s\","
+        "\"value_template\":\"{{ 'ON' if value_json.presence != 'none' else 'OFF' }}\","
+        "\"device_class\":\"occupancy\",\"availability_topic\":\"%s\",\"icon\":\"mdi:motion-sensor\","
+        "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"LightPlus\",\"sw_version\":\"%s\"}}",
+        g_device_id, g_topic_ha_state, g_topic_avail, g_device_id, FW_VERSION);
+    mqtt.publish(g_topic_disc_occ, buf, true);
+
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"Light level\",\"unique_id\":\"%s_light_level\",\"state_topic\":\"%s\","
+        "\"value_template\":\"{{ value_json.ldr_raw }}\",\"icon\":\"mdi:brightness-6\","
+        "\"availability_topic\":\"%s\","
+        "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"LightPlus\",\"sw_version\":\"%s\"}}",
+        g_device_id, g_topic_ha_state, g_topic_avail, g_device_id, FW_VERSION);
+    mqtt.publish(g_topic_disc_ldr, buf, true);
+
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"Target distance\",\"unique_id\":\"%s_distance\",\"state_topic\":\"%s\","
+        "\"value_template\":\"{{ value_json.radar_mdist }}\",\"unit_of_measurement\":\"cm\","
+        "\"state_class\":\"measurement\",\"icon\":\"mdi:radar\",\"availability_topic\":\"%s\","
+        "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"LightPlus\",\"sw_version\":\"%s\"}}",
+        g_device_id, g_topic_ha_state, g_topic_avail, g_device_id, FW_VERSION);
+    mqtt.publish(g_topic_disc_dist, buf, true);
+
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"Energy\",\"unique_id\":\"%s_energy\",\"state_topic\":\"%s\","
+        "\"value_template\":\"{{ value_json.energy_kwh }}\",\"unit_of_measurement\":\"kWh\","
+        "\"device_class\":\"energy\",\"state_class\":\"total_increasing\","
+        "\"icon\":\"mdi:lightning-bolt\",\"availability_topic\":\"%s\","
+        "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"LightPlus\",\"sw_version\":\"%s\"}}",
+        g_device_id, g_topic_ha_state, g_topic_avail, g_device_id, FW_VERSION);
+    mqtt.publish(g_topic_disc_energy, buf, true);
+}
+
+void mqtt_publish_state() {
+    char buf[448];
+    const uint32_t mired = 1000000UL / (g_state.color_temp ? g_state.color_temp : 2700);
+
+    if (g_rgb_active) {
+        snprintf(buf, sizeof(buf),
+            "{\"state\":\"%s\",\"brightness\":%u,\"color_mode\":\"rgb\","
+            "\"color\":{\"r\":%u,\"g\":%u,\"b\":%u},"
+            "\"presence\":\"%s\",\"dark\":%s,\"ldr_raw\":%u,\"cct\":%u,"
+            "\"energy_kwh\":%.5f,\"radar_mdist\":%lu,\"mode\":\"%s\",\"in_window\":%s}",
+            g_state.brightness > 0 ? "ON" : "OFF", g_state.brightness,
+            g_rgb_r, g_rgb_g, g_rgb_b,
+            presenceStr(g_state.presence), g_state.is_dark ? "true" : "false",
+            g_state.ldr_raw, g_state.color_temp,
+            g_state.total_kwh, (unsigned long)radar.movingTargetDistance(),
+            modeStr(g_state.mode), isInScheduleWindow() ? "true" : "false");
+    } else {
+        snprintf(buf, sizeof(buf),
+            "{\"state\":\"%s\",\"brightness\":%u,\"color_mode\":\"color_temp\",\"color_temp\":%lu,"
+            "\"presence\":\"%s\",\"dark\":%s,\"ldr_raw\":%u,\"cct\":%u,"
+            "\"energy_kwh\":%.5f,\"radar_mdist\":%lu,\"mode\":\"%s\",\"in_window\":%s}",
+            g_state.brightness > 0 ? "ON" : "OFF", g_state.brightness, (unsigned long)mired,
+            presenceStr(g_state.presence), g_state.is_dark ? "true" : "false",
+            g_state.ldr_raw, g_state.color_temp,
+            g_state.total_kwh, (unsigned long)radar.movingTargetDistance(),
+            modeStr(g_state.mode), isInScheduleWindow() ? "true" : "false");
+    }
+    mqtt.publish(g_topic_ha_state, buf, true);
+
+    char rich[WS_BUF_LEN];
+    buildStateJSON(rich, sizeof(rich));
+    mqtt.publish(g_topic_state, rich, true);
+}
+
+void mqttCallback(char *topic, byte *payload, unsigned int length) {
+    if (strcmp(topic, g_topic_set) != 0) return;
+
+    StaticJsonDocument<256> doc;
+    DeserializationError err = deserializeJson(doc, payload, length);
+    if (err) {
+        Serial.println(F("mqtt: bad json"));
+        return;
+    }
+
+    bool changed = false;
+
+    if (doc.containsKey("cmd")) {
+        const char *cmd = doc["cmd"] | "";
+        if (strcmp(cmd, "override") == 0) {
+            setLampMode(parseMode(doc["mode"] | "auto"));
+            changed = true;
+        } else if (strcmp(cmd, "set_brightness") == 0) {
+            uint16_t v = doc["value"] | g_manual_brightness;
+            if (v <= 255) { g_manual_brightness = (uint8_t)v; g_manual_bri_active = true; changed = true; }
+        } else if (strcmp(cmd, "set_cct") == 0) {
+            uint16_t v = doc["value"] | g_manual_cct;
+            if (v >= 2000 && v <= 6500) {
+                g_manual_cct = v;
+                g_rgb_active = false;
+                g_manual_cct_active = true;
+                changed = true;
+            }
+        } else if (strcmp(cmd, "set_rgb") == 0) {
+            uint16_t r = doc["r"] | 0, g = doc["g"] | 0, b = doc["b"] | 0;
+            if (r <= 255 && g <= 255 && b <= 255) {
+                g_rgb_r = (uint8_t)r;
+                g_rgb_g = (uint8_t)g;
+                g_rgb_b = (uint8_t)b;
+                g_rgb_active = true;
+                g_manual_cct_active = false;
+                changed = true;
+            }
+        }
+    } else {
+        const char *st = doc["state"];
+        if (st) {
+            setLampMode(strcmp(st, "ON") == 0 ? LampMode::FORCE_ON : LampMode::FORCE_OFF);
+            changed = true;
+        }
+        if (doc.containsKey("brightness")) {
+            uint16_t v = doc["brightness"] | g_manual_brightness;
+            if (v <= 255) { g_manual_brightness = (uint8_t)v; g_manual_bri_active = true; changed = true; }
+        }
+        if (doc.containsKey("color_temp")) {
+            uint32_t m = doc["color_temp"] | 0;
+            if (m > 0) {
+                uint32_t k = 1000000UL / m;
+                if (k < 2000) k = 2000;
+                if (k > 6500) k = 6500;
+                g_manual_cct = (uint16_t)k;
+                g_rgb_active = false;
+                g_manual_cct_active = true;
+                changed = true;
+            }
+        }
+        if (doc.containsKey("color")) {
+            JsonObject c = doc["color"];
+            g_rgb_r = c["r"] | 0;
+            g_rgb_g = c["g"] | 0;
+            g_rgb_b = c["b"] | 0;
+            g_rgb_active = true;
+            g_manual_cct_active = false;
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        Serial.println(F("mqtt: command applied"));
+        mqtt_publish_state();
+        wsBroadcast();
+    }
+}
+
+void mqtt_loop() {
+    if (!g_config.mqtt_enabled || g_config.mqtt_host[0] == 0) return;
+    if (WiFi.status() != WL_CONNECTED) return;
+
+    if (mqtt.connected()) {
+        mqtt.loop();
+    } else if (millis() - g_last_mqtt_try >= 5000UL) {
+        g_last_mqtt_try = millis();
+        mqtt_connect();
+    }
+
+    if (mqtt.connected()) {
+        char fp[80];
+        snprintf(fp, sizeof(fp), "%u|%u|%u|%u|%u|%u|%u|%u|%u|%u|%lu",
+                 (unsigned)g_state.mode, g_state.brightness, g_state.color_temp,
+                 g_rgb_active ? 1 : 0, g_rgb_r, g_rgb_g, g_rgb_b,
+                 (unsigned)g_state.presence, g_state.is_dark ? 1 : 0,
+                 isInScheduleWindow() ? 1 : 0,
+                 (unsigned long)(g_state.total_kwh * 100000.0f));
+        if (strcmp(fp, g_mqtt_fp) != 0 || millis() - g_last_mqtt_pub >= 60000UL) {
+            strlcpy(g_mqtt_fp, fp, sizeof(g_mqtt_fp));
+            g_last_mqtt_pub = millis();
+            mqtt_publish_state();
         }
     }
 }

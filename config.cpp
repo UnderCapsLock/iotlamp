@@ -15,6 +15,11 @@ static void applyDefaults() {
     g_config.dark_threshold       = 550;
     g_config.presence_hold_s      = 6;
     g_config.presence_lost        = 0;
+    g_config.mqtt_enabled         = 0;
+    g_config.mqtt_port            = 1883;
+    g_config.mqtt_host[0]         = 0;
+    g_config.mqtt_user[0]         = 0;
+    g_config.mqtt_pass[0]         = 0;
 }
 
 void loadConfig() {
@@ -22,9 +27,9 @@ void loadConfig() {
     prefs.begin(CONFIG_NAMESPACE, true);
 
     uint8_t version = prefs.getUChar("cfg_ver", 0xFF);
-    if (version != CONFIG_VERSION) {
+    if (version == 0xFF) {
         prefs.end();
-        Serial.println(F("cfg: no saved config or version mismatch, using defaults"));
+        Serial.println(F("cfg: no saved config, using defaults"));
         applyDefaults();
         saveConfig();
         return;
@@ -40,10 +45,24 @@ void loadConfig() {
     g_config.dark_threshold       = prefs.getUShort("dark", 550);
     g_config.presence_hold_s      = prefs.getUShort("ph_s", 6);
     g_config.presence_lost        = prefs.getUChar("pl_act", 0);
+    g_config.mqtt_enabled         = prefs.getUChar("m_en", 0);
+    g_config.mqtt_port            = prefs.getUShort("m_port", 1883);
+
+    String h = prefs.getString("m_host", "");
+    strlcpy(g_config.mqtt_host, h.c_str(), sizeof(g_config.mqtt_host));
+    String u = prefs.getString("m_user", "");
+    strlcpy(g_config.mqtt_user, u.c_str(), sizeof(g_config.mqtt_user));
+    String p = prefs.getString("m_pass", "");
+    strlcpy(g_config.mqtt_pass, p.c_str(), sizeof(g_config.mqtt_pass));
 
     prefs.end();
 
-    Serial.println(F("cfg: loaded from NVS"));
+    if (version != CONFIG_VERSION) {
+        Serial.println(F("cfg: migrating config to new version"));
+        saveConfig();
+    } else {
+        Serial.println(F("cfg: loaded from NVS"));
+    }
 }
 
 void saveConfig() {
@@ -60,6 +79,11 @@ void saveConfig() {
     prefs.putUShort("dark",    g_config.dark_threshold);
     prefs.putUShort("ph_s",    g_config.presence_hold_s);
     prefs.putUChar("pl_act",   g_config.presence_lost);
+    prefs.putUChar("m_en",     g_config.mqtt_enabled);
+    prefs.putUShort("m_port",  g_config.mqtt_port);
+    prefs.putString("m_host",  g_config.mqtt_host);
+    prefs.putString("m_user",  g_config.mqtt_user);
+    prefs.putString("m_pass",  g_config.mqtt_pass);
 
     prefs.end();
 
@@ -111,4 +135,15 @@ void setPresenceBehavior(uint16_t holdS, uint8_t lostAction) {
     g_config.presence_lost   = (lostAction > 1) ? 1 : lostAction;
     saveConfig();
     Serial.printf("cfg: presence hold %us, lost action %u\n", holdS, lostAction);
+}
+
+void setMqttConfig(uint8_t enabled, const char *host, uint16_t port, const char *user, const char *pass) {
+    g_config.mqtt_enabled = enabled ? 1 : 0;
+    g_config.mqtt_port    = (port == 0) ? 1883 : port;
+    strlcpy(g_config.mqtt_host, host ? host : "", sizeof(g_config.mqtt_host));
+    strlcpy(g_config.mqtt_user, user ? user : "", sizeof(g_config.mqtt_user));
+    strlcpy(g_config.mqtt_pass, pass ? pass : "", sizeof(g_config.mqtt_pass));
+    saveConfig();
+    Serial.printf("cfg: mqtt %s %s:%u\n", enabled ? "on" : "off",
+                  g_config.mqtt_host, g_config.mqtt_port);
 }
