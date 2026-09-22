@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <WiFi.h>
-#include <WiFiMulti.h>
 #include <esp_wifi.h>
 #include <FastLED.h>
 #include "pins.h"
@@ -113,8 +112,10 @@ unsigned long g_last_wifi_attempt = 0;
 bool          g_ldr_fault = false;
 
 static const uint8_t WIFI_MAX_NETWORKS = 3;
-WiFiMulti     g_wifiMulti;
+String        g_wifi_list_ssid[WIFI_MAX_NETWORKS + 1];
+String        g_wifi_list_pass[WIFI_MAX_NETWORKS + 1];
 uint8_t       g_wifi_net_count = 0;
+uint8_t       g_wifi_pref = 0;
 
 struct WsClientAuth {
     uint32_t id;
@@ -513,8 +514,20 @@ void loadWifiCreds() {
         Serial.println(F("wifi: compile-time network added as fallback"));
     }
 
+    for (uint8_t i = 0; i < n; i++) {
+        if (ssids[i] == WIFI_SSID && i != 0) {
+            String ts = ssids[0], tp = passes[0];
+            ssids[0] = ssids[i];
+            passes[0] = passes[i];
+            ssids[i] = ts;
+            passes[i] = tp;
+            break;
+        }
+    }
+
     if (n == 0) {
-        g_wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+        g_wifi_list_ssid[0] = WIFI_SSID;
+        g_wifi_list_pass[0] = WIFI_PASSWORD;
         g_wifi_net_count = 1;
         g_wifi_ssid = WIFI_SSID;
         g_wifi_pass = WIFI_PASSWORD;
@@ -522,8 +535,10 @@ void loadWifiCreds() {
         return;
     }
 
-    for (uint8_t i = 0; i < n; i++)
-        g_wifiMulti.addAP(ssids[i].c_str(), passes[i].c_str());
+    for (uint8_t i = 0; i < n; i++) {
+        g_wifi_list_ssid[i] = ssids[i];
+        g_wifi_list_pass[i] = passes[i];
+    }
     g_wifi_net_count = n;
     Serial.printf("wifi: %u network(s) registered\n", n);
 }
@@ -571,15 +586,27 @@ void wifi_connect() {
     if (millis() - g_last_wifi_attempt < 15000UL) return;
     g_last_wifi_attempt = millis();
 
-    Serial.printf("WiFi: trying %u saved network(s) ", g_wifi_net_count);
-    if (g_wifiMulti.run(12000) == WL_CONNECTED) {
-        g_wifi_fail_count = 0;
-        Serial.println(F(" ok"));
-        Serial.print(F("  IP ")); Serial.println(WiFi.localIP());
-    } else {
+    for (uint8_t k = 0; k < g_wifi_net_count; k++) {
+        uint8_t i = (g_wifi_pref + k) % g_wifi_net_count;
+        Serial.printf("WiFi: trying '%s' ", g_wifi_list_ssid[i].c_str());
+        WiFi.disconnect();
+        delay(50);
+        WiFi.begin(g_wifi_list_ssid[i].c_str(), g_wifi_list_pass[i].c_str());
+        unsigned long t = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - t < 8000UL) {
+            delay(250);
+            Serial.print('.');
+        }
+        if (WiFi.status() == WL_CONNECTED) {
+            g_wifi_fail_count = 0;
+            g_wifi_pref = i;
+            Serial.println(F(" ok"));
+            Serial.print(F("  IP ")); Serial.println(WiFi.localIP());
+            return;
+        }
         Serial.println(F(" fail"));
-        if (++g_wifi_fail_count >= 3) startSetupAP();
     }
+    if (++g_wifi_fail_count >= 3) startSetupAP();
 }
 
 // ================================================================

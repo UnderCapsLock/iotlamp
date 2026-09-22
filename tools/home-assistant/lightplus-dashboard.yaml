@@ -1,0 +1,54 @@
+title: LightPlus
+views:
+  - title: LightPlus
+    path: lightplus
+    icon: mdi:ceiling-light
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: LightPlus
+            heading_style: title
+            icon: mdi:ceiling-light
+          - type: tile
+            entity: light.lightplus_light
+            name: Lamp
+            vertical: false
+            features_position: bottom
+            features:
+              - type: light-brightness
+              - type: light-color-temp
+      - type: grid
+        cards:
+          - type: heading
+            heading: Presence
+            icon: mdi:radar
+          - type: tile
+            entity: binary_sensor.lightplus_occupancy
+            name: Occupancy
+          - type: tile
+            entity: sensor.lightplus_target_distance
+            name: Distance
+          - type: history-graph
+            title: Presence (last 24 h)
+            hours_to_show: 24
+            entities:
+              - entity: binary_sensor.lightplus_occupancy
+      - type: grid
+        cards:
+          - type: heading
+            heading: Environment
+            icon: mdi:brightness-6
+          - type: tile
+            entity: sensor.lightplus_light_level
+            name: Room light
+          - type: tile
+            entity: sensor.lightplus_energy
+            name: Energy
+          - type: history-graph
+            title: Room light (last 12 h)
+            hours_to_show: 12
+            entities:
+              - entity: sensor.lightplus_light_level
