@@ -3,6 +3,17 @@
 All notable changes to LightPlus are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
+## [1.3.0] - 2026-09-22
+
+### Added
+- **MQTT / Home Assistant integration** — retained discovery payloads auto-create a light (on/off, brightness, colour temp, RGB), occupancy, light level, target distance and energy entities; availability via LWT; native `{"cmd":...}` also accepted on the command topic
+- MQTT settings in the dashboard (enable, host, port, credentials) persisted to NVS; `set_mqtt` WebSocket command
+- Device id (`id`) and MQTT status fields in the state broadcast; MQTT status in diagnostics
+- `tools/mqtt_test.py` end-to-end MQTT/HA discovery test
+
+### Changed
+- Config version 4 with graceful migration (existing settings are preserved on upgrade instead of reset)
+
 ## [1.2.0] - 2026-09-22
 
 ### Added

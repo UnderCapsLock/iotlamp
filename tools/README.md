@@ -21,3 +21,15 @@ To build and flash the filesystem image manually:
 mklittlefs -c data -s 0x20000 -p 256 -b 4096 littlefs.bin
 esptool --chip esp32 --port <port> --baud 921600 write-flash 0x3D0000 littlefs.bin
 ```
+
+## `mqtt_test.py` — Home Assistant/MQTT integration test
+
+Verifies discovery payloads, availability, state publishing and the HA light
+command schema against a broker, then cleans up retained test messages.
+
+```bash
+pip install paho-mqtt
+python tools/mqtt_test.py <broker> <device-id>
+```
+
+Device ids look like `lpb9c9fc` (from the state broadcast `id` field).

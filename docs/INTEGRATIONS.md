@@ -19,7 +19,7 @@ protocol adapter.
 
 ## 1. Home Assistant
 
-### Option A — MQTT discovery (recommended first step)
+### Option A — MQTT discovery ✅ implemented (v1.3.0)
 
 Firmware publishes retained discovery payloads; Home Assistant auto-creates the
 entities. Works with any MQTT broker (Mosquitto add-on).

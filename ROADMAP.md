@@ -18,10 +18,11 @@ Guiding decisions:
 - [x] Radar stream watchdog + RX/TX auto-detect
 - [x] Host unit tests for schedule/easing/kelvin logic (CI)
 - [x] CI compile check + tagged release workflow (firmware + filesystem artifacts)
+- [x] Home Assistant via MQTT discovery (light, occupancy, light level, distance, energy)
 
 ## Next (product hardening)
 
-- [ ] MQTT discovery for Home Assistant (see `docs/INTEGRATIONS.md`)
+- [ ] HACS integration (WebSocket client, broker-free HA setup)
 - [ ] Radar auto-threshold calibration from the dashboard
 - [ ] Presence + energy history (24 h charts)
 - [ ] Editable/persisted scenes (NVS)

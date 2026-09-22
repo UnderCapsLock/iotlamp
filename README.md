@@ -43,6 +43,7 @@ A presence-aware bedside lamp that turns on only when the room is dark **and** a
 - **Energy tracking** — Estimates kWh consumption from brightness level and calculates cost at the Malaysian residential tariff rate (RM 0.27/kWh). Persisted to flash every 5 minutes.
 - **Radar gate tuning** — Per-gate moving and stationary sensitivity thresholds (0–100) exposed live on the dashboard, so you can exclude reflective objects (TVs, walls) or dial in sensitivity for your space.
 - **Sleep timer** — Configurable countdown (1–120 minutes) after which the lamp dims to floor. Cancel anytime.
+- **Home Assistant via MQTT** — auto-discovery of a light (on/off, brightness, colour temp, RGB), occupancy, light level, target distance and energy entities — no custom integration needed
 - **Captive-portal setup** — if the saved WiFi network is unreachable, the lamp hosts a `LightPlus-Setup` access point with a web setup page; credentials persist in flash
 - **Optional access token** — set `WS_TOKEN` to require authentication for control commands
 - **Presence behaviour** — configure how long the light lingers after you leave, and whether it fades to a night-light glow instead of switching off
@@ -266,6 +267,31 @@ Branding is centralized so it is easy to change:
 
 ---
 
+## Home Assistant (MQTT)
+
+The lamp speaks MQTT with Home Assistant auto-discovery. Steps:
+
+1. Have an MQTT broker (e.g. the **Mosquitto** add-on in Home Assistant).
+2. Open the dashboard → **Settings** → **MQTT (Home Assistant)**, enable it, enter
+   the broker host/port (and username/password if required), then **Save MQTT**.
+3. Home Assistant discovers the device automatically; entities appear under
+   **LightPlus**: light (on/off, brightness, colour temperature, RGB), occupancy,
+   light level, target distance and energy.
+
+Topics (device id from the MAC; shown in the dashboard state broadcast):
+
+| Topic | Direction | Purpose |
+|---|---|---|
+| `lightplus/<id>/ha/state` | device → broker | HA light state (retained) |
+| `lightplus/<id>/ha/set` | broker → device | HA light commands, or native `{"cmd":...}` |
+| `lightplus/<id>/state` | device → broker | full runtime state (for Node-RED etc.) |
+| `lightplus/<id>/availability` | device → broker | `online` / `offline` (LWT) |
+| `homeassistant/<component>/<id>_<name>/config` | device → broker | discovery payloads |
+
+A test tool lives at [`tools/mqtt_test.py`](tools/mqtt_test.py).
+
+---
+
 ## WebSocket API
 
 WebSocket endpoint: `ws://<esp32-ip>/ws`
@@ -288,6 +314,7 @@ Each command is a JSON object with a `"cmd"` field.
 | `set_gate_params` | `gate` (0–8), `moving` (0–100), `stationary` (0–100) | Set LD2410C gate sensitivity thresholds |
 | `reset_energy` | — | Reset kWh counter to zero |
 | `set_presence` | `hold_s` (1–300), `lost`: `"off"` or `"dim"` | Presence hold time and night-light behaviour |
+| `set_mqtt` | `enabled` (0/1), `host`, `port`, `user`?, `pass`? | Configure MQTT broker (omit user/pass to keep existing) |
 
 All commands return `{"result":"ok","cmd":"<command>"}` on success or `{"error":"<message>"}` on failure.
 
@@ -338,6 +365,9 @@ If `WS_TOKEN` is set in `wifi_config.h`, clients must first send `{"cmd":"auth",
 | `bs_h` / `bs_m` / `bs_d` | uint | Bedtime start hour/minute and duration (s) |
 | `ws_h` / `ws_m` / `ws_d` | uint | Wake start hour/minute and duration (s) |
 | `ph_s` / `pl_act` | uint | Presence hold seconds, lost action (0 = off, 1 = night light) |
+| `id` | string | Device id (from MAC, e.g. `lpb9c9fc`) — used in MQTT topics |
+| `mqtt_en` / `mqtt_on` | bool | MQTT enabled / connected |
+| `mqtt_host` / `mqtt_port` | string/uint | Configured broker (credentials never broadcast) |
 | `ldr_fault` | bool | Light sensor reading looks invalid (open/short) |
 | `ap` | bool | Setup access point is active |
 | `radar_ok` | bool | Radar data stream healthy |
