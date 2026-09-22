@@ -3,6 +3,16 @@
 All notable changes to LightPlus are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
+## [1.5.0] - 2026-09-22
+
+### Added
+- **Home Assistant "Auto mode" switch** — one tap returns the lamp to automatic presence control (turning it off forces the lamp off); appears automatically via MQTT discovery
+- HA sections dashboard (`tools/home-assistant/lightplus-dashboard.yaml`) with lamp, auto switch, presence and environment cards
+- Non-blocking radar recovery: a stalled/absent radar no longer blocks the main loop (~4 s per retry before; MQTT commands now answer in ~160 ms even with the sensor offline)
+
+### Fixed
+- Connection cycling when both home WiFi and a phone hotspot were saved — home network is preferred, hotspot is the fallback
+
 ## [1.4.0] - 2026-09-22
 
 ### Added

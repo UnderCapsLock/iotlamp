@@ -20,6 +20,10 @@ views:
             features:
               - type: light-brightness
               - type: light-color-temp
+          - type: tile
+            entity: switch.living_room_lightplus_auto_mode
+            name: Auto mode
+            icon: mdi:auto-mode
       - type: grid
         cards:
           - type: heading

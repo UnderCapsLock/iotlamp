@@ -30,7 +30,7 @@ const uint16_t LDR_HYSTERESIS     = 200;
 
 const uint8_t  FULL_BRIGHTNESS = 255;
 const uint16_t DEFAULT_CCT     = 2700;
-#define FW_VERSION "1.4.0"
+#define FW_VERSION "1.5.0"
 
 // ---------- globals ----------
 
@@ -148,8 +148,10 @@ char  g_device_id[16]        = "lp000000";
 char  g_topic_state[48]      = "";
 char  g_topic_ha_state[48]   = "";
 char  g_topic_set[48]        = "";
+char  g_topic_auto_set[48]   = "";
 char  g_topic_avail[48]      = "";
 char  g_topic_disc_light[64] = "";
+char  g_topic_disc_switch[64] = "";
 char  g_topic_disc_occ[64]   = "";
 char  g_topic_disc_ldr[64]   = "";
 char  g_topic_disc_dist[64]  = "";
@@ -262,8 +264,10 @@ void setup() {
         snprintf(g_topic_state, sizeof(g_topic_state), "lightplus/%s/state", g_device_id);
         snprintf(g_topic_ha_state, sizeof(g_topic_ha_state), "lightplus/%s/ha/state", g_device_id);
         snprintf(g_topic_set, sizeof(g_topic_set), "lightplus/%s/ha/set", g_device_id);
+        snprintf(g_topic_auto_set, sizeof(g_topic_auto_set), "lightplus/%s/ha/auto/set", g_device_id);
         snprintf(g_topic_avail, sizeof(g_topic_avail), "lightplus/%s/availability", g_device_id);
         snprintf(g_topic_disc_light, sizeof(g_topic_disc_light), "homeassistant/light/%s_light/config", g_device_id);
+        snprintf(g_topic_disc_switch, sizeof(g_topic_disc_switch), "homeassistant/switch/%s_auto/config", g_device_id);
         snprintf(g_topic_disc_occ, sizeof(g_topic_disc_occ), "homeassistant/binary_sensor/%s_occupancy/config", g_device_id);
         snprintf(g_topic_disc_ldr, sizeof(g_topic_disc_ldr), "homeassistant/sensor/%s_light_level/config", g_device_id);
         snprintf(g_topic_disc_dist, sizeof(g_topic_disc_dist), "homeassistant/sensor/%s_distance/config", g_device_id);
@@ -1264,6 +1268,7 @@ void mqtt_connect() {
     Serial.println(F("mqtt: connected"));
     mqtt.publish(g_topic_avail, "online", true);
     mqtt.subscribe(g_topic_set);
+    mqtt.subscribe(g_topic_auto_set);
     mqtt_publish_discovery();
     mqtt_publish_state();
     g_mqtt_fp[0] = 0;
@@ -1281,6 +1286,15 @@ void mqtt_publish_discovery() {
         "\"manufacturer\":\"LightPlus\",\"model\":\"ESP32 presence lamp\",\"sw_version\":\"%s\"}}",
         g_device_id, g_topic_ha_state, g_topic_set, g_topic_avail, g_device_id, FW_VERSION);
     mqtt.publish(g_topic_disc_light, buf, true);
+
+    snprintf(buf, sizeof(buf),
+        "{\"name\":\"Auto mode\",\"unique_id\":\"%s_auto\",\"state_topic\":\"%s\","
+        "\"value_template\":\"{{ 'ON' if value_json.mode == 'auto' else 'OFF' }}\","
+        "\"command_topic\":\"%s\",\"payload_on\":\"ON\",\"payload_off\":\"OFF\","
+        "\"icon\":\"mdi:auto-mode\",\"availability_topic\":\"%s\","
+        "\"device\":{\"identifiers\":[\"%s\"],\"name\":\"LightPlus\",\"sw_version\":\"%s\"}}",
+        g_device_id, g_topic_ha_state, g_topic_auto_set, g_topic_avail, g_device_id, FW_VERSION);
+    mqtt.publish(g_topic_disc_switch, buf, true);
 
     snprintf(buf, sizeof(buf),
         "{\"name\":\"Occupancy\",\"unique_id\":\"%s_occupancy\",\"state_topic\":\"%s\","
@@ -1351,6 +1365,15 @@ void mqtt_publish_state() {
 }
 
 void mqttCallback(char *topic, byte *payload, unsigned int length) {
+    if (strcmp(topic, g_topic_auto_set) == 0) {
+        bool on = (length >= 2 && payload[0] == 'O' && payload[1] == 'N');
+        setLampMode(on ? LampMode::AUTO : LampMode::FORCE_OFF);
+        Serial.printf("mqtt: auto mode %s\n", on ? "on" : "off");
+        mqtt_publish_state();
+        wsBroadcast();
+        return;
+    }
+
     if (strcmp(topic, g_topic_set) != 0) return;
 
     StaticJsonDocument<256> doc;

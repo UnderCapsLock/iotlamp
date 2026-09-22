@@ -275,8 +275,9 @@ The lamp speaks MQTT with Home Assistant auto-discovery. Steps:
 2. Open the dashboard → **Settings** → **MQTT (Home Assistant)**, enable it, enter
    the broker host/port (and username/password if required), then **Save MQTT**.
 3. Home Assistant discovers the device automatically; entities appear under
-   **LightPlus**: light (on/off, brightness, colour temperature, RGB), occupancy,
-   light level, target distance and energy.
+   **LightPlus**: light (on/off, brightness, colour temperature, RGB), **Auto mode
+   switch** (return to automatic presence control), occupancy, light level,
+   target distance and energy.
 
 Topics (device id from the MAC; shown in the dashboard state broadcast):
 
