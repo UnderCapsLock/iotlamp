@@ -347,7 +347,15 @@ void setup() {
         delay(600);
         ESP.restart();
     });
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (g_setup_ap) request->redirect("/wifi");
+        else request->send(LittleFS, "/index.html", "text/html");
+    });
     server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
+    server.onNotFound([](AsyncWebServerRequest *request) {
+        if (g_setup_ap) request->redirect("/wifi");
+        else request->send(404, "text/plain", "not found");
+    });
     server.begin();
 
     Serial.print(F("WebSocket server started on ws://"));
@@ -465,36 +473,59 @@ void loadWifiCreds() {
     Preferences prefs;
     prefs.begin(CONFIG_NAMESPACE, true);
 
+    String ssids[WIFI_MAX_NETWORKS + 1];
+    String passes[WIFI_MAX_NETWORKS + 1];
+    uint8_t n = 0;
+
     for (uint8_t i = 0; i < WIFI_MAX_NETWORKS; i++) {
         String s = prefs.getString(("w_ssid" + String(i)).c_str(), "");
         String p = prefs.getString(("w_pass" + String(i)).c_str(), "");
         if (s.length() == 0) continue;
-        g_wifiMulti.addAP(s.c_str(), p.c_str());
-        g_wifi_net_count++;
+        ssids[n] = s;
+        passes[n] = p;
+        n++;
         if (i == 0) { g_wifi_ssid = s; g_wifi_pass = p; }
     }
 
-    if (g_wifi_net_count == 0) {
+    if (n == 0) {
         String legacy = prefs.getString("w_ssid", "");
         String legacyPass = prefs.getString("w_pass", "");
         if (legacy.length() > 0) {
-            g_wifiMulti.addAP(legacy.c_str(), legacyPass.c_str());
-            g_wifi_net_count = 1;
+            ssids[n] = legacy;
+            passes[n] = legacyPass;
+            n++;
             g_wifi_ssid = legacy;
             g_wifi_pass = legacyPass;
             Serial.printf("wifi: using saved network '%s' (legacy key)\n", legacy.c_str());
-        } else {
-            g_wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
-            g_wifi_net_count = 1;
-            g_wifi_ssid = WIFI_SSID;
-            g_wifi_pass = WIFI_PASSWORD;
-            Serial.println(F("wifi: using compile-time credentials"));
         }
-    } else {
-        Serial.printf("wifi: %u saved network(s)\n", g_wifi_net_count);
     }
 
     prefs.end();
+
+    bool dup = false;
+    for (uint8_t i = 0; i < n; i++)
+        if (ssids[i] == WIFI_SSID) dup = true;
+
+    if (!dup && strlen(WIFI_SSID) > 0 && strcmp(WIFI_SSID, "YOUR_SSID") != 0) {
+        ssids[n] = WIFI_SSID;
+        passes[n] = WIFI_PASSWORD;
+        n++;
+        Serial.println(F("wifi: compile-time network added as fallback"));
+    }
+
+    if (n == 0) {
+        g_wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+        g_wifi_net_count = 1;
+        g_wifi_ssid = WIFI_SSID;
+        g_wifi_pass = WIFI_PASSWORD;
+        Serial.println(F("wifi: using compile-time credentials"));
+        return;
+    }
+
+    for (uint8_t i = 0; i < n; i++)
+        g_wifiMulti.addAP(ssids[i].c_str(), passes[i].c_str());
+    g_wifi_net_count = n;
+    Serial.printf("wifi: %u network(s) registered\n", n);
 }
 
 void saveWifiNetwork(const String &ssid, const String &pass) {

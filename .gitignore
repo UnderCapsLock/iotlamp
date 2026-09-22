@@ -2,3 +2,5 @@ wifi_config.h
 *.bin
 *.elf
 build/
+tools/home-assistant/ha-config/
+tools/home-assistant/data/

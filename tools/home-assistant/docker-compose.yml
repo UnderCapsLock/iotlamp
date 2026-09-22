@@ -1,0 +1,25 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: lightplus-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: lightplus-homeassistant
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    volumes:
+      - ./ha-config:/config
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - mosquitto
+
+volumes:
+  mosquitto-data:
