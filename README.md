@@ -44,7 +44,7 @@ A presence-aware bedside lamp that turns on only when the room is dark **and** a
 - **Radar gate tuning** — Per-gate moving and stationary sensitivity thresholds (0–100) exposed live on the dashboard, so you can exclude reflective objects (TVs, walls) or dial in sensitivity for your space.
 - **Sleep timer** — Configurable countdown (1–120 minutes) after which the lamp dims to floor. Cancel anytime.
 - **Home Assistant via MQTT** — auto-discovery of a light (on/off, brightness, colour temp, RGB), occupancy, light level, target distance and energy entities — no custom integration needed
-- **Captive-portal setup** — if the saved WiFi network is unreachable, the lamp hosts a `LightPlus-Setup` access point with a web setup page; credentials persist in flash
+- **Captive-portal setup** — remembers up to 3 WiFi networks and connects to whichever is available; if none are reachable the lamp hosts a `LightPlus-Setup` access point with a web setup page (also startable on demand from Settings)
 - **Optional access token** — set `WS_TOKEN` to require authentication for control commands
 - **Presence behaviour** — configure how long the light lingers after you leave, and whether it fades to a night-light glow instead of switching off
 - **Dashboard languages** — English / Bahasa Malaysia
@@ -315,6 +315,7 @@ Each command is a JSON object with a `"cmd"` field.
 | `reset_energy` | — | Reset kWh counter to zero |
 | `set_presence` | `hold_s` (1–300), `lost`: `"off"` or `"dim"` | Presence hold time and night-light behaviour |
 | `set_mqtt` | `enabled` (0/1), `host`, `port`, `user`?, `pass`? | Configure MQTT broker (omit user/pass to keep existing) |
+| `wifi_setup` | — | Start the `LightPlus-Setup` AP to add a WiFi network (lamp stays online) |
 
 All commands return `{"result":"ok","cmd":"<command>"}` on success or `{"error":"<message>"}` on failure.
 

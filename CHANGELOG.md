@@ -3,6 +3,13 @@
 All notable changes to LightPlus are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
+## [1.4.0] - 2026-09-22
+
+### Added
+- **Multiple saved WiFi networks** (up to 3) — the lamp connects to whichever saved network is available, so home WiFi and a demo hotspot can coexist
+- **Change WiFi button** in dashboard Settings (WebSocket `wifi_setup`) — starts the `LightPlus-Setup` AP on demand without rebooting or losing the current connection
+- Saved-network count in the state broadcast (`wifi_nets`)
+
 ## [1.3.0] - 2026-09-22
 
 ### Added

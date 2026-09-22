@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <esp_wifi.h>
 #include <FastLED.h>
 #include "pins.h"
@@ -30,7 +31,7 @@ const uint16_t LDR_HYSTERESIS     = 200;
 
 const uint8_t  FULL_BRIGHTNESS = 255;
 const uint16_t DEFAULT_CCT     = 2700;
-#define FW_VERSION "1.3.0"
+#define FW_VERSION "1.4.0"
 
 // ---------- globals ----------
 
@@ -111,6 +112,10 @@ uint8_t       g_wifi_fail_count = 0;
 unsigned long g_last_wifi_attempt = 0;
 bool          g_ldr_fault = false;
 
+static const uint8_t WIFI_MAX_NETWORKS = 3;
+WiFiMulti     g_wifiMulti;
+uint8_t       g_wifi_net_count = 0;
+
 struct WsClientAuth {
     uint32_t id;
     bool     authed;
@@ -183,6 +188,7 @@ CRGB kelvin_to_rgb(uint16_t kelvin) {
 
 void wifi_connect();
 void loadWifiCreds();
+void saveWifiNetwork(const String &ssid, const String &pass);
 void startSetupAP();
 void sync_ntp();
 void read_ldr();
@@ -333,11 +339,7 @@ void setup() {
         String s = request->arg("ssid");
         String p = request->arg("pass");
         if (s.length() == 0) { request->send(400, "text/plain", "SSID required"); return; }
-        Preferences prefs;
-        prefs.begin(CONFIG_NAMESPACE, false);
-        prefs.putString("w_ssid", s);
-        prefs.putString("w_pass", p);
-        prefs.end();
+        saveWifiNetwork(s, p);
         Serial.printf("wifi: saved credentials for '%s', restarting\n", s.c_str());
         request->send(200, "text/html",
             "<body style='background:#0b0d12;color:#e8eaf0;font-family:system-ui,sans-serif;padding:24px'>"
@@ -462,16 +464,61 @@ void loop() {
 void loadWifiCreds() {
     Preferences prefs;
     prefs.begin(CONFIG_NAMESPACE, true);
-    g_wifi_ssid = prefs.getString("w_ssid", "");
-    g_wifi_pass = prefs.getString("w_pass", "");
-    prefs.end();
-    if (g_wifi_ssid.length() == 0) {
-        g_wifi_ssid = WIFI_SSID;
-        g_wifi_pass = WIFI_PASSWORD;
-        Serial.println(F("wifi: using compile-time credentials"));
-    } else {
-        Serial.printf("wifi: using saved network '%s'\n", g_wifi_ssid.c_str());
+
+    for (uint8_t i = 0; i < WIFI_MAX_NETWORKS; i++) {
+        String s = prefs.getString(("w_ssid" + String(i)).c_str(), "");
+        String p = prefs.getString(("w_pass" + String(i)).c_str(), "");
+        if (s.length() == 0) continue;
+        g_wifiMulti.addAP(s.c_str(), p.c_str());
+        g_wifi_net_count++;
+        if (i == 0) { g_wifi_ssid = s; g_wifi_pass = p; }
     }
+
+    if (g_wifi_net_count == 0) {
+        String legacy = prefs.getString("w_ssid", "");
+        String legacyPass = prefs.getString("w_pass", "");
+        if (legacy.length() > 0) {
+            g_wifiMulti.addAP(legacy.c_str(), legacyPass.c_str());
+            g_wifi_net_count = 1;
+            g_wifi_ssid = legacy;
+            g_wifi_pass = legacyPass;
+            Serial.printf("wifi: using saved network '%s' (legacy key)\n", legacy.c_str());
+        } else {
+            g_wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+            g_wifi_net_count = 1;
+            g_wifi_ssid = WIFI_SSID;
+            g_wifi_pass = WIFI_PASSWORD;
+            Serial.println(F("wifi: using compile-time credentials"));
+        }
+    } else {
+        Serial.printf("wifi: %u saved network(s)\n", g_wifi_net_count);
+    }
+
+    prefs.end();
+}
+
+void saveWifiNetwork(const String &ssid, const String &pass) {
+    Preferences prefs;
+    prefs.begin(CONFIG_NAMESPACE, false);
+
+    int out = 1;
+    for (uint8_t i = 0; i < WIFI_MAX_NETWORKS && out < WIFI_MAX_NETWORKS; i++) {
+        String s = prefs.getString(("w_ssid" + String(i)).c_str(), "");
+        if (s.length() == 0 || s == ssid) continue;
+        String p = prefs.getString(("w_pass" + String(i)).c_str(), "");
+        prefs.putString(("w_ssid" + String(out)).c_str(), s);
+        prefs.putString(("w_pass" + String(out)).c_str(), p);
+        out++;
+    }
+    for (int i = out; i < WIFI_MAX_NETWORKS; i++) {
+        prefs.remove(("w_ssid" + String(i)).c_str());
+        prefs.remove(("w_pass" + String(i)).c_str());
+    }
+    prefs.putString("w_ssid0", ssid);
+    prefs.putString("w_pass0", pass);
+    prefs.remove("w_ssid");
+    prefs.remove("w_pass");
+    prefs.end();
 }
 
 void startSetupAP() {
@@ -493,16 +540,8 @@ void wifi_connect() {
     if (millis() - g_last_wifi_attempt < 15000UL) return;
     g_last_wifi_attempt = millis();
 
-    Serial.printf("WiFi '%s' ", g_wifi_ssid.c_str());
-    WiFi.begin(g_wifi_ssid.c_str(), g_wifi_pass.c_str());
-
-    unsigned long t = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - t < 12000UL) {
-        delay(400);
-        Serial.print(F("."));
-    }
-
-    if (WiFi.status() == WL_CONNECTED) {
+    Serial.printf("WiFi: trying %u saved network(s) ", g_wifi_net_count);
+    if (g_wifiMulti.run(12000) == WL_CONNECTED) {
         g_wifi_fail_count = 0;
         Serial.println(F(" ok"));
         Serial.print(F("  IP ")); Serial.println(WiFi.localIP());
@@ -866,7 +905,7 @@ int buildStateJSON(char *buf, size_t len) {
         "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu,\"fw\":\"%s\","
         "\"bs_h\":%u,\"bs_m\":%u,\"bs_d\":%u,\"ws_h\":%u,\"ws_m\":%u,\"ws_d\":%u,"
         "\"ph_s\":%u,\"pl_act\":%u,\"ldr_fault\":%s,\"ap\":%s,"
-        "\"id\":\"%s\",\"mqtt_en\":%u,\"mqtt_on\":%s,\"mqtt_host\":\"%s\",\"mqtt_port\":%u,"
+        "\"id\":\"%s\",\"mqtt_en\":%u,\"mqtt_on\":%s,\"mqtt_host\":\"%s\",\"mqtt_port\":%u,\"wifi_nets\":%u,"
         "\"radar_ok\":%s,\"radar_frames\":%lu,\"radar_status\":%u,\"radar_rx\":%lu,"
         "\"radar_mdist\":%lu,\"radar_sdist\":%lu,\"radar_msig\":%u,\"radar_ssig\":%u,"
         "\"radar_out\":%u}",
@@ -903,6 +942,7 @@ int buildStateJSON(char *buf, size_t len) {
         mqtt.connected() ? "true" : "false",
         g_config.mqtt_host,
         g_config.mqtt_port,
+        g_wifi_net_count,
         g_radar_online ? "true" : "false",
         (unsigned long)radar.getFrameCount(),
         (unsigned)radar.getStatus(),
@@ -1088,6 +1128,11 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client) {
         setPresenceBehavior(hold, strcmp(lost, "dim") == 0 ? 1 : 0);
         Serial.printf("ws: set_presence hold=%us lost=%s\n", hold, lost);
         client->text("{\"result\":\"ok\",\"cmd\":\"set_presence\"}");
+    }
+    else if (strcmp(cmd, "wifi_setup") == 0) {
+        startSetupAP();
+        Serial.println(F("ws: wifi_setup"));
+        client->text("{\"result\":\"ok\",\"cmd\":\"wifi_setup\"}");
     }
     else if (strcmp(cmd, "set_mqtt") == 0) {
         uint8_t en = doc["enabled"] | 0;

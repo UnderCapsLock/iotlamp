@@ -22,6 +22,9 @@ const I18N = {
     mqtt: 'MQTT (Home Assistant)', mqttShort: 'MQTT', mqttEnable: 'Enable MQTT', mqttHost: 'Broker host',
     mqttPort: 'Port', mqttUser: 'Username', mqttPass: 'Password', saveMqtt: 'Save MQTT',
     mqttSaved: 'MQTT settings saved', connected: 'connected', disabled: 'disabled',
+    wifi: 'WiFi network', changeWifi: 'Change WiFi',
+    wifiHint: 'Saved networks: {n}. To join a new one, tap Change WiFi, then connect to "LightPlus-Setup" on your phone.',
+    wifiStarted: 'Setup mode on — connect to "LightPlus-Setup" and open 192.168.4.1',
     auto: 'Auto', manual: 'Manual', none: 'None', noPresence: 'no presence', movement: 'movement',
     stillPresence: 'still presence', dark: 'Dark', bright: 'Bright', working: 'Working',
     notResponding: 'Not responding', noOne: 'No one detected', sensorOffline: 'Sensor offline',
@@ -61,6 +64,9 @@ const I18N = {
     mqtt: 'MQTT (Home Assistant)', mqttShort: 'MQTT', mqttEnable: 'Aktifkan MQTT', mqttHost: 'Hos broker',
     mqttPort: 'Port', mqttUser: 'Nama pengguna', mqttPass: 'Kata laluan', saveMqtt: 'Simpan MQTT',
     mqttSaved: 'Tetapan MQTT disimpan', connected: 'bersambung', disabled: 'dimatikan',
+    wifi: 'Rangkaian WiFi', changeWifi: 'Tukar WiFi',
+    wifiHint: 'Rangkaian disimpan: {n}. Untuk tambah baharu, ketik Tukar WiFi, kemudian sambung ke "LightPlus-Setup" pada telefon anda.',
+    wifiStarted: 'Mod persediaan aktif — sambung ke "LightPlus-Setup" dan buka 192.168.4.1',
     auto: 'Auto', manual: 'Manual', none: 'Tiada', noPresence: 'tiada kehadiran', movement: 'pergerakan',
     stillPresence: 'kehadiran statik', dark: 'Gelap', bright: 'Terang', working: 'Berfungsi',
     notResponding: 'Tidak bertindak', noOne: 'Tiada sesiapa dikesan', sensorOffline: 'Sensor luar talian',
@@ -351,6 +357,7 @@ function updateUI() {
   $('dUptime').textContent = fmtUptime(s.uptime_s || 0);
   $('dFw').textContent = fwShort(s.fw);
   $('dMqtt').textContent = s.mqtt_on ? t('connected') : (s.mqtt_en ? t('off') : t('disabled'));
+  $('wifiHint').textContent = t('wifiHint').replace('{n}', s.wifi_nets || 0);
 
   if (document.activeElement !== $('mqttHost')) $('mqttHost').value = s.mqtt_host || '';
   if (document.activeElement !== $('mqttPort')) $('mqttPort').value = s.mqtt_port || 1883;
@@ -750,6 +757,11 @@ $('langSel').addEventListener('change', () => {
   lang = $('langSel').value;
   localStorage.setItem('lightplus_lang', lang);
   applyLang();
+});
+
+$('wifiSetup').addEventListener('click', () => {
+  sendObj({ cmd: 'wifi_setup' }, t('wifiStarted'));
+  $('settingsSheet').classList.add('hidden');
 });
 
 /* ---------- PWA ---------- */
