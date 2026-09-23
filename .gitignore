@@ -4,3 +4,5 @@ wifi_config.h
 build/
 tools/home-assistant/ha-config/
 tools/home-assistant/data/
+dist/
+tools/android/debug.keystore
