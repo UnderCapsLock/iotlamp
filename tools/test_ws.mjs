@@ -135,8 +135,12 @@ log('sleep timer cancelled', lastState.sleep_timer_s === 0);
 await expectOk('clear manual flags (thr=0)', { cmd: 'set_dark_threshold', value: 0 });
 await sleep(2500);
 await expectOk(`restore threshold ${baseThr}`, { cmd: 'set_dark_threshold', value: baseThr });
-await sleep(2500);
-log('threshold restored', lastState.dark_threshold === baseThr);
+let thrRestored = false;
+for (let i = 0; i < 10 && !thrRestored; i++) {
+  await sleep(500);
+  thrRestored = lastState.dark_threshold === baseThr;
+}
+log('threshold restored', thrRestored);
 await expectOk('set presence behaviour', { cmd: 'set_presence', hold_s: 10, lost: 'off' });
 await sleep(2500);
 log('presence behaviour applied', lastState.ph_s === 10 && lastState.pl_act === 0);
