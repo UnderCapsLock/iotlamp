@@ -22,13 +22,16 @@ mklittlefs -c data -s 0x20000 -p 256 -b 4096 littlefs.bin
 esptool --chip esp32 --port <port> --baud 921600 write-flash 0x3D0000 littlefs.bin
 ```
 
-## `healthcheck.py` — whole-system check
+## `healthcheck.py` — whole-system check (or double-click `check.bat`)
 
-One command that verifies the entire deployment: lamp discovery (via MAC suffix,
-no IP needed), dashboard, WebSocket state, radar stream, MQTT broker, lamp MQTT
-connection, retained broker data, Docker containers and Home Assistant.
+One command that verifies the entire deployment: lamp discovery (via MAC suffix
+or `lightplus.local`, no IP needed), dashboard, WebSocket state, radar stream,
+MQTT broker, lamp MQTT connection, retained broker data, Docker containers and
+Home Assistant. Every failure prints the likely cause and how to fix it, and
+Docker Desktop is started automatically if it isn't running.
 
 ```bash
+check.bat                                        # double-click friendly, pauses at the end
 python tools/healthcheck.py
 python tools/healthcheck.py --ip 192.168.0.7    # skip discovery
 ```

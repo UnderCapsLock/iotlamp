@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""LightPlus system health check.
+"""LightPlus system health check with diagnosis.
 
-Checks: lamp discovery, dashboard, WebSocket state, radar stream, MQTT broker,
-lamp MQTT connection, retained broker data, Docker containers, Home Assistant.
+Runs from check.bat (double-click) or:
+    python tools/healthcheck.py [--ip 192.168.0.7] [--mac-suffix b9-c9-fc]
 
-Usage: python tools/healthcheck.py [--ip 192.168.0.7] [--mac-suffix b9-c9-fc]
-Requires: pip install paho-mqtt (only for the broker checks)
+Each failing check prints the likely cause and how to fix it.
+Requires: pip install paho-mqtt (for the broker checks)
 """
 
 import argparse
@@ -22,11 +22,37 @@ from concurrent.futures import ThreadPoolExecutor
 
 RESULTS = []
 
+FIXES = {
+    "Lamp discovered": "Is the lamp powered? Wait ~30s after power-on. Same WiFi as this PC? "
+                       "If WiFi changed, connect to the 'LightPlus-Setup' network and open 192.168.4.1.",
+    "Dashboard reachable": "Wrong IP, or the lamp's dashboard is down. Run without --ip to auto-discover; "
+                           "if the IP is right, power-cycle the lamp.",
+    "WebSocket state": "Power-cycle the lamp; if it persists, reflash the firmware (Arduino IDE network port).",
+    "Radar streaming": "Radar lost power or data: check the red (5V) and black (GND) wires first, "
+                       "then TX->GPIO16 and RX->GPIO17. It recovers by itself within seconds once data flows.",
+    "Lamp MQTT connected": "Check that the broker host equals this laptop's IP (see WARNING above) and that "
+                           "Docker is running. Fix in the dashboard: Settings -> MQTT.",
+    "MQTT broker port 1883": "Docker/broker is down. Open Docker Desktop, then run: "
+                             "docker compose -f tools\\home-assistant\\docker-compose.yml up -d",
+    "Broker availability": "The lamp is not publishing to the broker - see 'Lamp MQTT connected'.",
+    "Broker retained state": "Broker is up but no lamp data - wait 10 seconds and run the check again.",
+    "Broker checks": "Either paho-mqtt is not installed (pip install paho-mqtt) or the broker is down "
+                     "(start Docker Desktop).",
+    "Docker containers": "Docker Desktop must be running. Containers start automatically once it is; "
+                         "if not, run docker compose up -d in tools\\home-assistant.",
+    "Home Assistant UI": "Home Assistant needs 1-2 minutes after Docker starts - wait and re-run.",
+}
 
-def report(name, ok, detail=""):
+
+def report(name, ok, detail="", fix=None):
     mark = "PASS" if ok else "FAIL"
     print(f"[{mark}] {name}" + (f" -- {detail}" if detail else ""))
-    RESULTS.append((name, ok))
+    text = None
+    if not ok:
+        text = fix or FIXES.get(name)
+        if text:
+            print(f"        -> {text}")
+    RESULTS.append((name, ok, text))
 
 
 def note(name, value):
@@ -65,6 +91,7 @@ def discover(mac_suffix, ip_hint=None):
     found = arp_find(mac_suffix)
     if found:
         return found
+    print("       scanning the network for the lamp...")
     ip = local_ip()
     subnet = ip.rsplit(".", 1)[0]
 
@@ -171,17 +198,34 @@ def broker_retained():
     return avail, state
 
 
+def docker_exe():
+    path = os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                        "Programs", "DockerDesktop", "resources", "bin", "docker.exe")
+    return path if os.path.exists(path) else "docker"
+
+
 def docker_status():
-    docker = os.path.join(os.environ.get("LOCALAPPDATA", ""),
-                          "Programs", "DockerDesktop", "resources", "bin", "docker.exe")
-    if not os.path.exists(docker):
-        docker = "docker"
     try:
-        out = subprocess.run([docker, "ps", "--format", "{{.Names}}={{.Status}}"],
+        out = subprocess.run([docker_exe(), "ps", "--format", "{{.Names}}={{.Status}}"],
                              capture_output=True, text=True, timeout=20).stdout
         return out.strip().splitlines()
     except Exception:
         return []
+
+
+def start_docker_desktop():
+    exe = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs",
+                       "DockerDesktop", "Docker Desktop.exe")
+    if not os.path.exists(exe):
+        return False
+    print("       Docker Desktop is not running - starting it (this can take ~1 minute)...")
+    subprocess.Popen([exe], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    for _ in range(18):
+        time.sleep(5)
+        if docker_status():
+            print("       Docker is up.")
+            return True
+    return False
 
 
 def main():
@@ -224,8 +268,9 @@ def main():
         report("Lamp MQTT connected", bool(state.get("mqtt_on")),
                f"broker {state.get('mqtt_host')}:{state.get('mqtt_port')}")
         if state.get("mqtt_host") and state["mqtt_host"] != lip:
-            note("WARNING", f"lamp targets {state['mqtt_host']} but this laptop is {lip} — "
-                            f"run set_mqtt with host {lip}")
+            report("Lamp uses current laptop IP", False,
+                   f"lamp targets {state['mqtt_host']}, laptop is {lip}",
+                   fix=f"Laptop IP changed. In the lamp dashboard: Settings -> MQTT, set host to {lip}, save.")
 
     report("MQTT broker port 1883", socket_test("127.0.0.1", 1883))
     avail, retained = broker_retained()
@@ -237,6 +282,9 @@ def main():
         report("Broker checks", False, "paho-mqtt missing or broker unreachable")
 
     containers = docker_status()
+    if not containers:
+        start_docker_desktop()
+        containers = docker_status()
     ha = any(c.startswith("lightplus-homeassistant=Up") for c in containers)
     mq = any(c.startswith("lightplus-mosquitto=Up") for c in containers)
     report("Docker containers", ha and mq,
@@ -256,12 +304,14 @@ def socket_test(host, port):
 
 
 def finish():
-    fails = [n for n, ok in RESULTS if not ok]
+    fails = [(n, f) for n, ok, f in RESULTS if not ok]
     print("-" * 50)
     if fails:
-        print(f"RESULT: {len(fails)} problem(s): " + "; ".join(fails))
+        print(f"RESULT: {len(fails)} problem(s) found:")
+        for n, f in fails:
+            print(f"  - {n}" + (f" -> {f}" if f else ""))
         sys.exit(1)
-    print("RESULT: all checks passed")
+    print("RESULT: all checks passed - system ready")
     sys.exit(0)
 
 
