@@ -22,6 +22,19 @@ mklittlefs -c data -s 0x20000 -p 256 -b 4096 littlefs.bin
 esptool --chip esp32 --port <port> --baud 921600 write-flash 0x3D0000 littlefs.bin
 ```
 
+## `healthcheck.py` — whole-system check
+
+One command that verifies the entire deployment: lamp discovery (via MAC suffix,
+no IP needed), dashboard, WebSocket state, radar stream, MQTT broker, lamp MQTT
+connection, retained broker data, Docker containers and Home Assistant.
+
+```bash
+python tools/healthcheck.py
+python tools/healthcheck.py --ip 192.168.0.7    # skip discovery
+```
+
+Exits non-zero if anything fails — perfect as a pre-demo ritual.
+
 ## `mqtt_test.py` — Home Assistant/MQTT integration test
 
 Verifies discovery payloads, availability, state publishing and the HA light
