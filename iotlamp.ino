@@ -670,7 +670,7 @@ void radarScanPins() {
     int bestPin = -1;
     unsigned long bestBytes = 0;
 
-    const uint8_t scanPins[] = {LD2410_RX_PIN, LD2410_TX_PIN}; // 16, 17
+    const uint8_t scanPins[] = {LD2410_RX_PIN, LD2410_TX_PIN, LD2410_OUT}; // 16, 17, 4
     for (uint8_t i = 0; i < sizeof(scanPins); i++) {
         uint8_t rx = scanPins[i];
         uint8_t tx = scanPins[(i + 1) % 2];
