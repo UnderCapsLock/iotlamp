@@ -15,7 +15,8 @@ const I18N = {
     presenceSensitivity: 'Presence sensitivity',
     sensDesc: 'How far away subtle movement is picked up. Higher catches more, but may react to fans or curtains.',
     saveSensitivity: 'Save sensitivity', minDist: 'Minimum distance',
-    minDistHint: 'Ignore targets closer than this (0 = off)', presenceBehavior: 'When no one is there', holdLabel: 'Stay on for',
+    minDistHint: 'Ignore targets closer than this (0 = off)',
+    maxDist: 'Maximum distance', maxDistHint: 'Ignore targets farther than this (0 = off)', presenceBehavior: 'When no one is there', holdLabel: 'Stay on for',
     lostLabel: 'Then', lostOff: 'Turn off', lostDim: 'Night light', savePresence: 'Save behaviour',
     activityLog: 'Activity log', connection: 'Connection', deviceIp: 'Device IP',
     tokenLabel: 'Access token (optional)', language: 'Language', close: 'Close', connect: 'Connect',
@@ -58,7 +59,8 @@ const I18N = {
     presenceSensitivity: 'Kesensitifan kehadiran',
     sensDesc: 'Sejauh mana pergerakan halus dikesan. Lebih tinggi lebih sensitif, tetapi mungkin mengesan kipas atau langsir.',
     saveSensitivity: 'Simpan kesensitifan', minDist: 'Jarak minimum',
-    minDistHint: 'Abaikan sasaran lebih dekat daripada ini (0 = mati)', presenceBehavior: 'Bila tiada sesiapa', holdLabel: 'Kekal hidup',
+    minDistHint: 'Abaikan sasaran lebih dekat daripada ini (0 = mati)',
+    maxDist: 'Jarak maksimum', maxDistHint: 'Abaikan sasaran lebih jauh daripada ini (0 = mati)', presenceBehavior: 'Bila tiada sesiapa', holdLabel: 'Kekal hidup',
     lostLabel: 'Kemudian', lostOff: 'Matikan', lostDim: 'Lampu malam', savePresence: 'Simpan tingkah laku',
     activityLog: 'Log aktiviti', connection: 'Sambungan', deviceIp: 'IP peranti',
     tokenLabel: 'Token akses (pilihan)', language: 'Bahasa', close: 'Tutup', connect: 'Sambung',
@@ -396,6 +398,10 @@ function updateUI() {
     $('minDist').value = s.min_dist || 0;
     $('minDistVal').textContent = (s.min_dist || 0) === 0 ? 'off' : s.min_dist + ' cm';
   }
+  if (document.activeElement !== $('maxDist')) {
+    $('maxDist').value = s.max_dist || 0;
+    $('maxDistVal').textContent = (s.max_dist || 0) === 0 ? 'off' : s.max_dist + ' cm';
+  }
 
   // ambient tint follows the lamp color
   const col = s.color_src === 'rgb' ? { r: s.rgb_r, g: s.rgb_g, b: s.rgb_b } : kelvinToRGB(s.cct);
@@ -713,12 +719,18 @@ function renderGateLevels() {
 $('saveGates').addEventListener('click', () => {
   const g = GATE_LEVELS[gateLevel];
   sendObj({ cmd: 'set_gate_params', gate: 255, moving: g.moving, stationary: g.stationary });
-  sendObj({ cmd: 'set_min_distance', value: +$('minDist').value }, t('sensitivitySaved'));
+  sendObj({ cmd: 'set_min_distance', value: +$('minDist').value });
+  sendObj({ cmd: 'set_max_distance', value: +$('maxDist').value }, t('sensitivitySaved'));
 });
 
 $('minDist').addEventListener('input', () => {
   const v = +$('minDist').value;
   $('minDistVal').textContent = v === 0 ? 'off' : v + ' cm';
+});
+
+$('maxDist').addEventListener('input', () => {
+  const v = +$('maxDist').value;
+  $('maxDistVal').textContent = v === 0 ? 'off' : v + ' cm';
 });
 
 $('savePresence').addEventListener('click', () => {

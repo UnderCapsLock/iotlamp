@@ -105,11 +105,13 @@ await expectErr('reject sleep > 120 min', { cmd: 'start_sleep_timer', minutes: 2
 await expectErr('reject threshold > 4095', { cmd: 'set_dark_threshold', value: 5000 });
 await expectErr('reject presence hold 0', { cmd: 'set_presence', hold_s: 0, lost: 'off' });
 await expectErr('reject min distance > 600', { cmd: 'set_min_distance', value: 700 });
+await expectErr('reject max distance > 600', { cmd: 'set_max_distance', value: 700 });
 
 const baseThr = lastState.dark_threshold;
 const baseHold = lastState.ph_s || 6;
 const baseLost = lastState.pl_act === 1 ? 'dim' : 'off';
 const baseMinDist = lastState.min_dist || 0;
+const baseMaxDist = lastState.max_dist || 0;
 
 await expectOk('override force_on', { cmd: 'override', mode: 'force_on' });
 await sleep(2500);
@@ -159,6 +161,16 @@ for (let i = 0; i < 10 && !minDistOk; i++) {
   minDistOk = lastState.min_dist === baseMinDist;
 }
 log('min distance restored', minDistOk);
+await expectOk('set max distance 200', { cmd: 'set_max_distance', value: 200 });
+await sleep(2500);
+log('max distance applied', lastState.max_dist === 200);
+await expectOk(`restore max distance ${baseMaxDist}`, { cmd: 'set_max_distance', value: baseMaxDist });
+let maxDistOk = false;
+for (let i = 0; i < 10 && !maxDistOk; i++) {
+  await sleep(500);
+  maxDistOk = lastState.max_dist === baseMaxDist;
+}
+log('max distance restored', maxDistOk);
 
 const fails = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - fails}/${results.length} passed, ${fails} failed, ${ackCount} acks`);

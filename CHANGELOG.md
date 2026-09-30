@@ -3,6 +3,11 @@
 All notable changes to LightPlus are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows [SemVer](https://semver.org/).
 
+## [1.7.0] - 2026-09-22
+
+### Added
+- **Radar maximum-distance filter** — presence farther than the configured distance (0–600 cm, 0 = off) is ignored, completing the detection window (min + max); adjustable in the dashboard and via `set_max_distance`
+
 ## [1.6.0] - 2026-09-22
 
 ### Added

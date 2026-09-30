@@ -30,7 +30,7 @@ const uint16_t LDR_HYSTERESIS     = 200;
 
 const uint8_t  FULL_BRIGHTNESS = 255;
 const uint16_t DEFAULT_CCT     = 2700;
-#define FW_VERSION "1.6.0"
+#define FW_VERSION "1.7.0"
 
 // ---------- globals ----------
 
@@ -742,11 +742,16 @@ void poll_radar() {
     Presence cur = Presence::NONE;
     if (radar.presenceDetected()) {
         uint16_t minD = g_config.radar_min_dist_cm;
+        uint16_t maxD = g_config.radar_max_dist_cm;
         bool moving = radar.movingTargetDetected();
         bool stationary = radar.stationaryTargetDetected();
         if (minD > 0) {
             if (moving && radar.movingTargetDistance() < minD) moving = false;
             if (stationary && radar.stationaryTargetDistance() < minD) stationary = false;
+        }
+        if (maxD > 0) {
+            if (moving && radar.movingTargetDistance() > maxD) moving = false;
+            if (stationary && radar.stationaryTargetDistance() > maxD) stationary = false;
         }
         if (moving)      cur = Presence::MOVING;
         else if (stationary) cur = Presence::STATIONARY;
@@ -974,7 +979,7 @@ int buildStateJSON(char *buf, size_t len) {
         "\"sleep_timer_s\":%lu,\"uptime_s\":%lu,\"in_window\":%s,\"timestamp\":%lu,\"fw\":\"%s\","
         "\"bs_h\":%u,\"bs_m\":%u,\"bs_d\":%u,\"ws_h\":%u,\"ws_m\":%u,\"ws_d\":%u,"
         "\"ph_s\":%u,\"pl_act\":%u,\"ldr_fault\":%s,\"ap\":%s,"
-        "\"min_dist\":%u,"
+        "\"min_dist\":%u,\"max_dist\":%u,"
         "\"id\":\"%s\",\"mqtt_en\":%u,\"mqtt_on\":%s,\"mqtt_host\":\"%s\",\"mqtt_port\":%u,\"wifi_nets\":%u,"
         "\"radar_ok\":%s,\"radar_frames\":%lu,\"radar_status\":%u,\"radar_rx\":%lu,"
         "\"radar_mdist\":%lu,\"radar_sdist\":%lu,\"radar_msig\":%u,\"radar_ssig\":%u,"
@@ -1008,6 +1013,7 @@ int buildStateJSON(char *buf, size_t len) {
         g_ldr_fault ? "true" : "false",
         g_setup_ap ? "true" : "false",
         g_config.radar_min_dist_cm,
+        g_config.radar_max_dist_cm,
         g_device_id,
         g_config.mqtt_enabled,
         mqtt.connected() ? "true" : "false",
@@ -1198,6 +1204,16 @@ void wsHandleCommand(uint8_t *data, size_t len, AsyncWebSocketClient *client) {
         setRadarMinDist(val);
         Serial.printf("ws: set_min_distance %u\n", val);
         client->text("{\"result\":\"ok\",\"cmd\":\"set_min_distance\"}");
+    }
+    else if (strcmp(cmd, "set_max_distance") == 0) {
+        uint16_t val = doc["value"] | 0;
+        if (val > 600) {
+            client->text("{\"error\":\"max distance must be 0-600 cm\"}");
+            return;
+        }
+        setRadarMaxDist(val);
+        Serial.printf("ws: set_max_distance %u\n", val);
+        client->text("{\"result\":\"ok\",\"cmd\":\"set_max_distance\"}");
     }
     else if (strcmp(cmd, "set_presence") == 0) {
         uint16_t hold = doc["hold_s"] | 0;

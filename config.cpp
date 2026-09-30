@@ -16,6 +16,7 @@ static void applyDefaults() {
     g_config.presence_hold_s      = 6;
     g_config.presence_lost        = 0;
     g_config.radar_min_dist_cm    = 0;
+    g_config.radar_max_dist_cm    = 0;
     g_config.mqtt_enabled         = 0;
     g_config.mqtt_port            = 1883;
     g_config.mqtt_host[0]         = 0;
@@ -47,6 +48,7 @@ void loadConfig() {
     g_config.presence_hold_s      = prefs.getUShort("ph_s", 6);
     g_config.presence_lost        = prefs.getUChar("pl_act", 0);
     g_config.radar_min_dist_cm    = prefs.getUShort("min_dist", 0);
+    g_config.radar_max_dist_cm    = prefs.getUShort("max_dist", 0);
     g_config.mqtt_enabled         = prefs.getUChar("m_en", 0);
     g_config.mqtt_port            = prefs.getUShort("m_port", 1883);
 
@@ -82,6 +84,7 @@ void saveConfig() {
     prefs.putUShort("ph_s",    g_config.presence_hold_s);
     prefs.putUChar("pl_act",   g_config.presence_lost);
     prefs.putUShort("min_dist", g_config.radar_min_dist_cm);
+    prefs.putUShort("max_dist", g_config.radar_max_dist_cm);
     prefs.putUChar("m_en",     g_config.mqtt_enabled);
     prefs.putUShort("m_port",  g_config.mqtt_port);
     prefs.putString("m_host",  g_config.mqtt_host);
@@ -148,6 +151,16 @@ void setRadarMinDist(uint16_t cm) {
     g_config.radar_min_dist_cm = cm;
     saveConfig();
     Serial.printf("cfg: radar min distance %ucm\n", cm);
+}
+
+void setRadarMaxDist(uint16_t cm) {
+    if (cm > 600) {
+        Serial.println(F("cfg: max distance out of range (0-600cm)"));
+        return;
+    }
+    g_config.radar_max_dist_cm = cm;
+    saveConfig();
+    Serial.printf("cfg: radar max distance %ucm\n", cm);
 }
 
 void setMqttConfig(uint8_t enabled, const char *host, uint16_t port, const char *user, const char *pass) {    g_config.mqtt_enabled = enabled ? 1 : 0;

@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define CONFIG_VERSION   5
+#define CONFIG_VERSION   6
 #define CONFIG_NAMESPACE "lamp_cfg"
 
 struct RuntimeConfig {
@@ -22,6 +22,7 @@ struct RuntimeConfig {
     uint8_t  presence_lost;
 
     uint16_t radar_min_dist_cm;
+    uint16_t radar_max_dist_cm;
 
     uint8_t  mqtt_enabled;
     uint16_t mqtt_port;
@@ -40,4 +41,5 @@ void setWakeWindow(   uint8_t startH, uint8_t startM, uint16_t durationS);
 void setDarkThreshold(uint16_t value);
 void setPresenceBehavior(uint16_t holdS, uint8_t lostAction);
 void setRadarMinDist(uint16_t cm);
+void setRadarMaxDist(uint16_t cm);
 void setMqttConfig(uint8_t enabled, const char *host, uint16_t port, const char *user, const char *pass);

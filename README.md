@@ -315,6 +315,7 @@ Each command is a JSON object with a `"cmd"` field.
 | `set_gate_params` | `gate` (0–8), `moving` (0–100), `stationary` (0–100) | Set LD2410C gate sensitivity thresholds |
 | `reset_energy` | — | Reset kWh counter to zero |
 | `set_min_distance` | `value` (0–600 cm, 0 = off) | Ignore presence closer than this distance |
+| `set_max_distance` | `value` (0–600 cm, 0 = off) | Ignore presence farther than this distance |
 | `set_presence` | `hold_s` (1–300), `lost`: `"off"` or `"dim"` | Presence hold time and night-light behaviour |
 | `set_mqtt` | `enabled` (0/1), `host`, `port`, `user`?, `pass`? | Configure MQTT broker (omit user/pass to keep existing) |
 | `wifi_setup` | — | Start the `LightPlus-Setup` AP to add a WiFi network (lamp stays online) |
@@ -368,7 +369,7 @@ If `WS_TOKEN` is set in `wifi_config.h`, clients must first send `{"cmd":"auth",
 | `bs_h` / `bs_m` / `bs_d` | uint | Bedtime start hour/minute and duration (s) |
 | `ws_h` / `ws_m` / `ws_d` | uint | Wake start hour/minute and duration (s) |
 | `ph_s` / `pl_act` | uint | Presence hold seconds, lost action (0 = off, 1 = night light) |
-| `min_dist` | uint | Minimum detection distance in cm (0 = off) |
+| `min_dist` / `max_dist` | uint | Detection distance window in cm (0 = off) |
 | `id` | string | Device id (from MAC, e.g. `lpb9c9fc`) — used in MQTT topics |
 | `mqtt_en` / `mqtt_on` | bool | MQTT enabled / connected |
 | `mqtt_host` / `mqtt_port` | string/uint | Configured broker (credentials never broadcast) |
