@@ -185,7 +185,7 @@ def fix_mqtt_host(ip, host):
                 st = conn.next_state(6)
             except Exception:
                 break
-            if st.get("mqtt_on"):
+            if st.get("mqtt_host") == host:
                 return True
         return False
     finally:
@@ -333,7 +333,7 @@ def main():
                     mqtt_state = read_ws_state(ip)
                 except Exception:
                     pass
-                report("Lamp uses current laptop IP", bool(mqtt_state.get("mqtt_on")),
+                report("Lamp uses current laptop IP", bool(mqtt_state.get("mqtt_host") == lip),
                        f"auto-fixed to {lip}",
                        fix=f"Still wrong - set host to {lip} in the dashboard: Settings -> MQTT")
             else:

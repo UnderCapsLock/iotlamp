@@ -111,6 +111,8 @@ const currentState = {
   dark_threshold: 550, ldr_raw: 0, energy_kwh: 0, cost_myr: 0, color_src: 'cct',
   rgb_r: 0, rgb_g: 0, rgb_b: 0, sleep_timer_s: 0, uptime_s: 0, timestamp: 0,
   in_window: false, fw: '', bs_h: 22, bs_m: 0, bs_d: 3600, ws_h: 6, ws_m: 0, ws_d: 1800,
+  ph_s: 6, pl_act: 0, min_dist: 0, max_dist: 0, ap: false, ldr_fault: false,
+  mqtt_en: 0, mqtt_on: false, mqtt_host: '', mqtt_port: 1883, wifi_nets: 0,
   radar_ok: false, radar_frames: 0, radar_status: 255,
   radar_rx: 0, radar_mdist: 0, radar_sdist: 0, radar_msig: 0, radar_ssig: 0, radar_out: 0
 };
@@ -397,10 +399,12 @@ function updateUI() {
   if (document.activeElement !== $('minDist')) {
     $('minDist').value = s.min_dist || 0;
     $('minDistVal').textContent = (s.min_dist || 0) === 0 ? 'off' : s.min_dist + ' cm';
+    $('minDist').style.setProperty('--fill', ((s.min_dist || 0) / 300 * 100) + '%');
   }
   if (document.activeElement !== $('maxDist')) {
     $('maxDist').value = s.max_dist || 0;
     $('maxDistVal').textContent = (s.max_dist || 0) === 0 ? 'off' : s.max_dist + ' cm';
+    $('maxDist').style.setProperty('--fill', ((s.max_dist || 0) / 600 * 100) + '%');
   }
 
   // ambient tint follows the lamp color
@@ -726,11 +730,13 @@ $('saveGates').addEventListener('click', () => {
 $('minDist').addEventListener('input', () => {
   const v = +$('minDist').value;
   $('minDistVal').textContent = v === 0 ? 'off' : v + ' cm';
+  $('minDist').style.setProperty('--fill', (v / 300 * 100) + '%');
 });
 
 $('maxDist').addEventListener('input', () => {
   const v = +$('maxDist').value;
   $('maxDistVal').textContent = v === 0 ? 'off' : v + ' cm';
+  $('maxDist').style.setProperty('--fill', (v / 600 * 100) + '%');
 });
 
 $('savePresence').addEventListener('click', () => {
