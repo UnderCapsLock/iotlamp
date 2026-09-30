@@ -104,42 +104,100 @@ def discover(mac_suffix, ip_hint=None):
     return arp_find(mac_suffix)
 
 
-def read_ws_state(ip, timeout=6):
-    s = socket.create_connection((ip, 80), timeout=timeout)
-    key = base64.b64encode(os.urandom(16)).decode()
-    req = (f"GET /ws HTTP/1.1\r\nHost: {ip}\r\nUpgrade: websocket\r\n"
-           f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n"
-           f"Sec-WebSocket-Version: 13\r\n\r\n")
-    s.sendall(req.encode())
-    buf = b""
-    while b"\r\n\r\n" not in buf:
-        chunk = s.recv(1024)
-        if not chunk:
-            raise RuntimeError("connection closed during handshake")
-        buf += chunk
-    head, rest = buf.split(b"\r\n\r\n", 1)
-    if b"101" not in head.split(b"\r\n")[0]:
-        raise RuntimeError("websocket upgrade rejected")
-    buf = rest
-    end = time.time() + timeout
-    while time.time() < end:
-        s.settimeout(max(0.5, end - time.time()))
-        frame = parse_frame(buf)
-        while frame is None:
-            chunk = s.recv(2048)
+class WsConn:
+    def __init__(self, ip, timeout=6):
+        self.s = socket.create_connection((ip, 80), timeout=timeout)
+        self.buf = b""
+        key = base64.b64encode(os.urandom(16)).decode()
+        req = (f"GET /ws HTTP/1.1\r\nHost: {ip}\r\nUpgrade: websocket\r\n"
+               f"Connection: Upgrade\r\nSec-WebSocket-Key: {key}\r\n"
+               f"Sec-WebSocket-Version: 13\r\n\r\n")
+        self.s.sendall(req.encode())
+        buf = b""
+        while b"\r\n\r\n" not in buf:
+            chunk = self.s.recv(1024)
             if not chunk:
-                raise RuntimeError("connection closed")
+                self.close()
+                raise RuntimeError("connection closed during handshake")
             buf += chunk
-            frame = parse_frame(buf)
-        (opcode, payload), buf = frame
-        if opcode == 1:
+        head, rest = buf.split(b"\r\n\r\n", 1)
+        if b"101" not in head.split(b"\r\n")[0]:
+            self.close()
+            raise RuntimeError("websocket upgrade rejected")
+        self.buf = rest
+
+    def next_state(self, timeout=6):
+        end = time.time() + timeout
+        while time.time() < end:
+            self.s.settimeout(max(0.5, end - time.time()))
+            frame = parse_frame(self.buf)
+            while frame is None:
+                chunk = self.s.recv(2048)
+                if not chunk:
+                    raise RuntimeError("connection closed")
+                self.buf += chunk
+                frame = parse_frame(self.buf)
+            (opcode, payload), self.buf = frame
+            if opcode == 1:
+                try:
+                    msg = json.loads(payload.decode("utf-8", "replace"))
+                    if "dark" in msg:
+                        return msg
+                except Exception:
+                    pass
+        raise RuntimeError("no state message received")
+
+    def send(self, text):
+        payload = text.encode()
+        mask = os.urandom(4)
+        header = bytearray([0x81])
+        n = len(payload)
+        if n < 126:
+            header.append(0x80 | n)
+        elif n < 65536:
+            header.append(0x80 | 126)
+            header += n.to_bytes(2, "big")
+        else:
+            header.append(0x80 | 127)
+            header += n.to_bytes(8, "big")
+        header += mask
+        masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
+        self.s.sendall(bytes(header) + masked)
+
+    def close(self):
+        try:
+            self.s.close()
+        except Exception:
+            pass
+
+
+def fix_mqtt_host(ip, host):
+    try:
+        conn = WsConn(ip)
+    except Exception:
+        return False
+    try:
+        conn.send(json.dumps({"cmd": "set_mqtt", "enabled": 1,
+                              "host": host, "port": 1883}))
+        end = time.time() + 15
+        while time.time() < end:
             try:
-                msg = json.loads(payload.decode("utf-8", "replace"))
-                if "dark" in msg:
-                    return msg
+                st = conn.next_state(6)
             except Exception:
-                pass
-    raise RuntimeError("no state message received")
+                break
+            if st.get("mqtt_on"):
+                return True
+        return False
+    finally:
+        conn.close()
+
+
+def read_ws_state(ip, timeout=6):
+    conn = WsConn(ip, timeout)
+    try:
+        return conn.next_state(timeout)
+    finally:
+        conn.close()
 
 
 def parse_frame(buf):
@@ -265,12 +323,25 @@ def main():
             report("Radar streaming", False, str(e))
         note("Presence", state.get("presence"))
         note("Room", "dark" if state.get("dark") else "bright")
-        report("Lamp MQTT connected", bool(state.get("mqtt_on")),
-               f"broker {state.get('mqtt_host')}:{state.get('mqtt_port')}")
+        mqtt_state = state
         if state.get("mqtt_host") and state["mqtt_host"] != lip:
-            report("Lamp uses current laptop IP", False,
-                   f"lamp targets {state['mqtt_host']}, laptop is {lip}",
-                   fix=f"Laptop IP changed. In the lamp dashboard: Settings -> MQTT, set host to {lip}, save.")
+            print(f"[FIX ] Lamp uses current laptop IP -- lamp targets {state['mqtt_host']}, laptop is {lip}")
+            print(f"        -> auto-fixing: pointing the lamp at {lip}...")
+            if fix_mqtt_host(ip, lip):
+                note("Auto-fix", f"lamp MQTT host updated to {lip}")
+                try:
+                    mqtt_state = read_ws_state(ip)
+                except Exception:
+                    pass
+                report("Lamp uses current laptop IP", bool(mqtt_state.get("mqtt_on")),
+                       f"auto-fixed to {lip}",
+                       fix=f"Still wrong - set host to {lip} in the dashboard: Settings -> MQTT")
+            else:
+                report("Lamp uses current laptop IP", False,
+                       f"lamp targets {state['mqtt_host']}, laptop is {lip}",
+                       fix="Auto-fix failed - set it in the dashboard: Settings -> MQTT")
+        report("Lamp MQTT connected", bool(mqtt_state.get("mqtt_on")),
+               f"broker {mqtt_state.get('mqtt_host')}:{mqtt_state.get('mqtt_port')}")
 
     report("MQTT broker port 1883", socket_test("127.0.0.1", 1883))
     avail, retained = broker_retained()

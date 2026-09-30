@@ -27,8 +27,9 @@ esptool --chip esp32 --port <port> --baud 921600 write-flash 0x3D0000 littlefs.b
 One command that verifies the entire deployment: lamp discovery (via MAC suffix
 or `lightplus.local`, no IP needed), dashboard, WebSocket state, radar stream,
 MQTT broker, lamp MQTT connection, retained broker data, Docker containers and
-Home Assistant. Every failure prints the likely cause and how to fix it, and
-Docker Desktop is started automatically if it isn't running.
+Home Assistant. Every failure prints the likely cause and how to fix it.
+Docker Desktop is started automatically if it isn't running, and if the
+laptop's IP changed (DHCP), the lamp's MQTT host is re-pointed automatically.
 
 ```bash
 check.bat                                        # double-click friendly, pauses at the end
