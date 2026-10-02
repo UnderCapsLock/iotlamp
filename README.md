@@ -2,9 +2,14 @@
 
 A presence-aware bedside lamp that turns on only when the room is dark **and** a human is actually in it. Uses mmWave radar to detect stationary people (not just motion), dims gently toward bedtime, ramps up for a wake window, and hosts its own control dashboard — no cloud, no app, no external dependencies.
 
+🏆 **Awarded first place at the 2026 project competition.**
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Dashboard screenshot](screenshots/dashboard.png)
+<p align="center">
+  <img src="screenshots/dashboard.png" width="72%" alt="LightPlus dashboard" />
+  <img src="screenshots/mobile.png" width="24%" alt="LightPlus on a phone" />
+</p>
 
 ---
 
@@ -41,7 +46,7 @@ A presence-aware bedside lamp that turns on only when the room is dark **and** a
 - **WebSocket real-time control** — Bidirectional JSON state broadcast every 2 seconds, plus 11 commands for on-the-fly configuration.
 - **OTA firmware updates** — Upload new firmware wirelessly via Arduino IDE or `espota.py`. No USB cable after the first flash.
 - **Energy tracking** — Estimates kWh consumption from brightness level and calculates cost at the Malaysian residential tariff rate (RM 0.27/kWh). Persisted to flash every 5 minutes.
-- **Radar gate tuning** — Per-gate moving and stationary sensitivity thresholds (0–100) exposed live on the dashboard, so you can exclude reflective objects (TVs, walls) or dial in sensitivity for your space.
+- **Presence tuning** — five sensitivity presets plus a configurable detection window (ignore targets closer or farther than set distances), so you can exclude fans, curtains or objects right under the lamp.
 - **Sleep timer** — Configurable countdown (1–120 minutes) after which the lamp dims to floor. Cancel anytime.
 - **Home Assistant via MQTT** — auto-discovery of a light (on/off, brightness, colour temp, RGB), occupancy, light level, target distance and energy entities — no custom integration needed
 - **Captive-portal setup** — remembers up to 3 WiFi networks and connects to whichever is available; if none are reachable the lamp hosts a `LightPlus-Setup` access point with a web setup page (also startable on demand from Settings)
@@ -236,16 +241,19 @@ Open `http://<esp32-ip>/` in any browser on the same WiFi network. The dashboard
 
 The dashboard is a single-page application with:
 
-- **LED Status** — live ON/OFF/FORCED indicator, presence type (moving/stationary/none), dark/bright state, NTP sync status
-- **Override buttons** — Auto / Force On / Force Off with optimistic UI updates
-- **Brightness slider** — percentage fill bar with 200 ms debounce
-- **Color Temperature** — slider (2000–6500K), live swatch, three CCT presets (Warm 2700K, Cool 4000K, Day 5000K), custom RGB color picker
-- **Power & cost** — estimated kWh, cost in MYR, current wattage, reset button
-- **Sleep timer** — dropdown (15/30/45/60 min), Start/Cancel, live countdown
-- **LDR calibration** — canvas-based rolling chart, live reading, threshold indicator, one-click "Set to Current"
-- **Schedule config** — bedtime dim and wake ramp: start time + duration
-- **Gate sensitivity** — LD2410C per-gate moving and stationary thresholds (0–100)
-- **Command log** — color-coded last 20 events (sent / received / error)
+- **LED status** — live On/Off/Auto indicator, presence type (moving/still/none), dark/bright state, schedule and time
+- **Scenes** — Reading / Relax / Movie / Focus, one tap each (with hover hints)
+- **Mode control** — Auto / On / Off segmented control with optimistic updates and smooth orb fades
+- **Brightness & color** — brightness slider, colour-temperature slider with warm→cool gradient, presets, custom RGB picker
+- **Power & cost** — estimated kWh, cost in MYR, reset button
+- **Sleep timer** — 15/30/45/60 minutes, live countdown, fades out over the last minute
+- **Room light** — live chart with threshold indicator and one-click "Use current level"
+- **Schedule timeline** — 24-hour bar with bedtime/wake bands and a "now" marker
+- **Live sensor** — animated radar sweep with target dots, distances and signal strength
+- **Presence tuning** — five sensitivity presets, minimum/maximum detection distances
+- **Presence behaviour** — how long the light lingers after you leave; night-light instead of off
+- **Extra polish** — English/Bahasa Malaysia, night mode, offline state, activity log
+- **PWA** — installable to the home screen, works from the lamp itself with no internet
 
 ---
 
@@ -432,6 +440,13 @@ node tools/test_ws.mjs 192.168.0.6
 
 It checks HTTP serving, the state broadcast, every command's validation path, and reversible write commands (restoring device state afterwards). It exits non-zero on failure.
 
+### One-click tools (Windows)
+
+- **`check.bat`** — whole-system health check (lamp discovery, radar stream, dashboard, MQTT broker, Docker containers, Home Assistant) with plain-language diagnosis, Docker auto-start and MQTT host auto-fix
+- **`dashboard.bat`** — finds the lamp's current address and opens the dashboard in the default browser
+- `tools/mqtt_test.py` — MQTT / Home Assistant discovery test
+- See [`tools/README.md`](tools/README.md) for everything else
+
 ## Continuous Integration
 
 [`.github/workflows/ci.yml`](.github/workflows/ci.yml) compiles the firmware on every push and pull request using the ESP32 Arduino core, the public libraries, and the vendored `MyLD2410` copy.
@@ -440,6 +455,7 @@ It checks HTTP serving, the state broadcast, every command's validation path, an
 
 | Document | Contents |
 |---|---|
+| [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md) | Setup and usage guide for end users (printable manual) |
 | [`docs/HARDWARE.md`](docs/HARDWARE.md) | Wiring, power notes, BOM and cost-cutting options |
 | [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) | Home Assistant / HomeKit / Matter integration plan |
 | [`ROADMAP.md`](ROADMAP.md) | What's done and what's next |

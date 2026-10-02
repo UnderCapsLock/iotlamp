@@ -6,3 +6,4 @@ tools/home-assistant/ha-config/
 tools/home-assistant/data/
 dist/
 tools/android/debug.keystore
+__pycache__/
