@@ -2,8 +2,6 @@
 
 A presence-aware bedside lamp that turns on only when the room is dark **and** a human is actually in it. Uses mmWave radar to detect stationary people (not just motion), dims gently toward bedtime, ramps up for a wake window, and hosts its own control dashboard — no cloud, no app, no external dependencies.
 
-🏆 **Awarded first place at the 2026 project competition.**
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <p align="center">
